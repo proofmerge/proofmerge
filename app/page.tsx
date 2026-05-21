@@ -2,23 +2,25 @@ import Link from "next/link";
 
 const GITLAWB_API = "https://node.gitlawb.com/api/v1";
 
+export const revalidate = 60;
+
 async function fetchGitlawbData() {
   try {
     const [statsRes, reposRes, agentsRes, peersRes] = await Promise.all([
-      fetch(`${GITLAWB_API}/stats`, { cache: "no-store" }),
-      fetch(`${GITLAWB_API}/repos?limit=4`, { cache: "no-store" }),
-      fetch(`${GITLAWB_API}/agents`, { cache: "no-store" }),
-      fetch(`${GITLAWB_API}/peers`, { cache: "no-store" }),
+      fetch(`${GITLAWB_API}/stats`, { next: { revalidate: 60 } }),
+      fetch(`${GITLAWB_API}/repos`, { next: { revalidate: 60 } }),
+      fetch(`${GITLAWB_API}/agents`, { next: { revalidate: 300 } }),
+      fetch(`${GITLAWB_API}/peers`, { next: { revalidate: 60 } }),
     ]);
 
     const stats = statsRes.ok ? await statsRes.json() : { agents: 0, repos: 0, pushes: 0, version: "unknown" };
     const reposRaw = reposRes.ok ? await reposRes.json() : [];
     const repos = Array.isArray(reposRaw) ? reposRaw.slice(0, 4) : [];
     const agentsData = agentsRes.ok ? await agentsRes.json() : { agents: [] };
-    const allAgents = agentsData.agents || [];
+    const agents = (agentsData.agents || []).slice(0, 3);
     const peersData = peersRes.ok ? await peersRes.json() : { count: 0 };
 
-    return { stats, repos, agents: allAgents.slice(0, 3), peers: peersData.count || 0 };
+    return { stats, repos, agents, peers: peersData.count || 0 };
   } catch {
     return {
       stats: { agents: 0, repos: 0, pushes: 0, version: "unknown" },
