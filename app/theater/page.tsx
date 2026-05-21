@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getAgents, getNetworkEvents } from "@/lib/gitlawb/client";
+import { getCachedAgents } from "@/lib/supabase/gitlawb-cache";
 import { generateMockEvents } from "@/lib/gitlawb/mock-events";
 import type { GitlawbAgent, GitlawbEvent } from "@/lib/gitlawb/types";
 
@@ -14,10 +15,11 @@ export default function TheaterPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [agentsData, realEvents] = await Promise.all([
-        getAgents(20),
-        getNetworkEvents(),
-      ]);
+      // Try cached agents first (fast), fallback to live API
+      const cachedAgents = await getCachedAgents(20);
+      const agentsData = cachedAgents.length > 0 ? cachedAgents : await getAgents(20);
+
+      const realEvents = await getNetworkEvents();
       setAgents(agentsData);
       setEvents(realEvents.length > 0 ? realEvents : generateMockEvents(10));
     } catch (err) {

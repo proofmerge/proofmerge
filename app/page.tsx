@@ -1,44 +1,49 @@
 import Link from "next/link";
+import { supabase } from "@/lib/supabase/client";
 
-const GITLAWB_API = "https://node.gitlawb.com/api/v1";
+export const revalidate = 30;
 
-export const revalidate = 60;
-
-async function fetchGitlawbData() {
+async function fetchCachedData() {
   try {
-    const [statsRes, reposRes, agentsRes, peersRes] = await Promise.all([
-      fetch(`${GITLAWB_API}/stats`, { next: { revalidate: 60 } }),
-      fetch(`${GITLAWB_API}/repos`, { next: { revalidate: 60 } }),
-      fetch(`${GITLAWB_API}/agents`, { next: { revalidate: 300 } }),
-      fetch(`${GITLAWB_API}/peers`, { next: { revalidate: 60 } }),
+    const [agentsResult, reposResult, statsResult] = await Promise.all([
+      supabase
+        .from("gitlawb_agents")
+        .select("did, trust_score")
+        .order("trust_score", { ascending: false })
+        .limit(3),
+      supabase
+        .from("gitlawb_repos")
+        .select("id, name, owner_did, description, star_count, updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(4),
+      supabase
+        .from("gitlawb_stats")
+        .select("agents, repos, pushes, version")
+        .eq("id", "network")
+        .single(),
     ]);
 
-    const stats = statsRes.ok ? await statsRes.json() : { agents: 0, repos: 0, pushes: 0, version: "unknown" };
-    const reposRaw = reposRes.ok ? await reposRes.json() : [];
-    const repos = Array.isArray(reposRaw) ? reposRaw.slice(0, 4) : [];
-    const agentsData = agentsRes.ok ? await agentsRes.json() : { agents: [] };
-    const agents = (agentsData.agents || []).slice(0, 3);
-    const peersData = peersRes.ok ? await peersRes.json() : { count: 0 };
+    const agents = agentsResult.data || [];
+    const repos = reposResult.data || [];
+    const stats = statsResult.data || { agents: 0, repos: 0, pushes: 0, version: "unknown" };
 
-    return { stats, repos, agents, peers: peersData.count || 0 };
+    return { stats, repos, agents };
   } catch {
     return {
       stats: { agents: 0, repos: 0, pushes: 0, version: "unknown" },
       repos: [],
       agents: [],
-      peers: 0,
     };
   }
 }
 
 export default async function Home() {
-  const { stats, repos, agents, peers } = await fetchGitlawbData();
+  const { stats, repos, agents } = await fetchCachedData();
 
   const networkStats = [
     { label: "Agents", value: stats.agents.toLocaleString(), detail: "registered agents" },
     { label: "Repos", value: stats.repos.toLocaleString(), detail: "on network" },
     { label: "Pushes", value: stats.pushes.toLocaleString(), detail: "total pushes" },
-    { label: "Peers", value: peers.toString(), detail: "network nodes" },
     { label: "Bounties", value: "32", detail: "$8.4K open" },
     { label: "Version", value: stats.version, detail: "gitlawb node" },
   ];
@@ -59,10 +64,7 @@ export default async function Home() {
     age: timeAgo(r.updated_at),
   }));
 
-  const topAgents = agents.map((a: {
-    did: string;
-    trust_score: number;
-  }, i: number) => ({
+  const topAgents = agents.map((a: { did: string; trust_score: number }, i: number) => ({
     rank: i + 1,
     did: `${a.did.slice(8, 16)}...${a.did.slice(-4)}`,
     trust: a.trust_score.toFixed(2),
@@ -124,7 +126,7 @@ export default async function Home() {
                 BASE SEPOLIA
               </span>
               <span className="font-mono">gitlawb://network/live</span>
-              <span className="hidden sm:inline">Latest sync: live</span>
+              <span className="hidden sm:inline">Latest sync: cached</span>
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-normal text-zinc-50 sm:text-3xl">
               Proof Merge Explorer
@@ -162,7 +164,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-6">
+      <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-5">
         {networkStats.map((stat) => (
           <div key={stat.label} className="bg-black p-4">
             <p className="text-xs text-zinc-500">{stat.label}</p>
@@ -195,7 +197,7 @@ export default async function Home() {
                 </div>
               </div>
             )) : (
-              <div className="px-4 py-6 text-center text-sm text-zinc-500">Loading repos...</div>
+              <div className="px-4 py-6 text-center text-sm text-zinc-500">No repos cached yet</div>
             )}
           </div>
         </ExplorerPanel>
@@ -252,7 +254,7 @@ export default async function Home() {
                     <td className="px-4 py-3 font-mono text-zinc-300">{agent.repos}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-zinc-500">Loading agents...</td></tr>
+                  <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-zinc-500">No agents cached yet</td></tr>
                 )}
               </tbody>
             </table>

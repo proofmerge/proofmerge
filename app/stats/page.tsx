@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRealtimeStats } from "@/lib/hooks/useRealtime";
 import { getAgents, getNetworkStats, getRepos, getPeers, getNetworkOverview } from "@/lib/gitlawb/client";
+import { getCachedAgents, getCachedRepos, getCachedStats } from "@/lib/supabase/gitlawb-cache";
 import type {
   GitlawbAgent,
   GitlawbNetworkStats,
@@ -22,16 +23,36 @@ export default function StatsPage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const [stats, reposData, agentsData, peersData, overviewData] = await Promise.all([
-        getNetworkStats(),
-        getRepos(),
-        getAgents(10),
+      // Try cached data first (fast), fallback to live API
+      const [cachedStats, cachedRepos, cachedAgents] = await Promise.all([
+        getCachedStats(),
+        getCachedRepos(10),
+        getCachedAgents(10),
+      ]);
+
+      const hasCachedData = cachedStats.agents > 0;
+
+      if (hasCachedData) {
+        setNetworkStats(cachedStats);
+        setRepos(cachedRepos);
+        setAgents(cachedAgents);
+      } else {
+        // Fallback to live API if no cached data
+        const [stats, reposData, agentsData] = await Promise.all([
+          getNetworkStats(),
+          getRepos(),
+          getAgents(10),
+        ]);
+        setNetworkStats(stats);
+        setRepos(reposData.slice(0, 10));
+        setAgents(agentsData.slice(0, 10));
+      }
+
+      // Peers and overview always from live API (small response)
+      const [peersData, overviewData] = await Promise.all([
         getPeers(),
         getNetworkOverview(),
       ]);
-      setNetworkStats(stats);
-      setRepos(reposData.slice(0, 10));
-      setAgents(agentsData.slice(0, 10));
       setPeers(peersData);
       setOverview(overviewData);
     } catch (err) {
