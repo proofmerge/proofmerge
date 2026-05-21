@@ -23,6 +23,23 @@ const STATUS_MAP: Record<number, string> = {
   3: "cancelled",
 };
 
+interface GitlawbBounty {
+  id: string;
+  title: string;
+  amount: number;
+  status: string;
+  repo_name: string;
+  repo_owner: string;
+  creator_did: string;
+  claimant_did: string | null;
+  created_at: string;
+  claimed_at: string | null;
+  completed_at: string | null;
+  deadline_secs: number;
+  issue_id: string | null;
+  pr_id: string | null;
+}
+
 interface OnChainBounty {
   id: bigint;
   creator: `0x${string}`;
@@ -42,10 +59,11 @@ export default function BountiesPage() {
   const { profile, isConnected } = useAuth();
   const { address } = useAccount();
   const [bounties, setBounties] = useState<Bounty[]>([]);
+  const [gitlawbBounties, setGitlawbBounties] = useState<GitlawbBounty[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "open" | "claimed" | "completed">("all");
+  const [filter, setFilter] = useState<"all" | "open" | "claimed" | "completed" | "submitted" | "cancelled">("all");
   const [showCreate, setShowCreate] = useState(false);
-  const [activeTab, setActiveTab] = useState<"onchain" | "offchain">("onchain");
+  const [activeTab, setActiveTab] = useState<"onchain" | "offchain" | "gitlawb">("gitlawb");
 
   const { data: bountyCount } = useBountyCount();
   const { data: onChainBounties, refetch: refetchOnChain } = useBounties(
@@ -66,12 +84,29 @@ export default function BountiesPage() {
     }
   }, [filter]);
 
+  const fetchGitlawbBounties = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gitlawb/bounties");
+      const data = await res.json();
+      setGitlawbBounties(data.bounties || []);
+    } catch (err) {
+      console.error("Error fetching gitlawb bounties:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === "offchain") queueMicrotask(() => void fetchBounties());
-  }, [activeTab, fetchBounties]);
+    if (activeTab === "gitlawb") queueMicrotask(() => void fetchGitlawbBounties());
+  }, [activeTab, fetchBounties, fetchGitlawbBounties]);
 
   const filteredOnChainBounties = ((onChainBounties as OnChainBounty[]) || []).filter(
     (bounty) => filter === "all" || STATUS_MAP[Number(bounty.status)] === filter
+  );
+
+  const filteredGitlawbBounties = gitlawbBounties.filter(
+    (bounty) => filter === "all" || bounty.status === filter
   );
 
   return (
@@ -110,13 +145,26 @@ export default function BountiesPage() {
           >
             Off-Chain
           </TabButton>
+          <TabButton
+            active={activeTab === "gitlawb"}
+            onClick={() => {
+              setActiveTab("gitlawb");
+              setLoading(true);
+              setFilter("all");
+            }}
+          >
+            gitlawb ({gitlawbBounties.length})
+          </TabButton>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {(["all", "open", "claimed", "completed"] as const).map((nextFilter) => (
+          {(activeTab === "gitlawb"
+            ? ["all", "submitted", "claimed", "completed", "cancelled"]
+            : ["all", "open", "claimed", "completed"]
+          ).map((nextFilter) => (
             <button
               key={nextFilter}
-              onClick={() => setFilter(nextFilter)}
+              onClick={() => setFilter(nextFilter as typeof filter)}
               className={`rounded-md border px-3 py-1.5 text-sm transition ${
                 filter === nextFilter
                   ? "border-green-500/40 bg-green-500/10 text-green-300"
@@ -160,6 +208,20 @@ export default function BountiesPage() {
                 profileId={profile?.id}
                 onClaim={fetchBounties}
               />
+            ))
+          )}
+        </section>
+      )}
+
+      {activeTab === "gitlawb" && (
+        <section className="space-y-3">
+          {loading ? (
+            <EmptyState>Loading...</EmptyState>
+          ) : filteredGitlawbBounties.length === 0 ? (
+            <EmptyState>No gitlawb bounties found</EmptyState>
+          ) : (
+            filteredGitlawbBounties.map((bounty) => (
+              <GitlawbBountyCard key={bounty.id} bounty={bounty} />
             ))
           )}
         </section>
@@ -394,6 +456,53 @@ function ActionButton({
   );
 }
 
+function GitlawbBountyCard({ bounty }: { bounty: GitlawbBounty }) {
+  const statusColor =
+    bounty.status === "submitted"
+      ? "bg-green-500/10 text-green-300 border-green-500/30"
+      : bounty.status === "claimed"
+        ? "bg-yellow-500/10 text-yellow-300 border-yellow-500/30"
+        : bounty.status === "completed"
+          ? "bg-green-500/10 text-green-300 border-green-500/30"
+          : "bg-zinc-900 text-zinc-400 border-zinc-800";
+
+  return (
+    <article className="rounded-lg border border-green-500/20 bg-black p-4 transition hover:border-green-500/40">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-medium text-white">{bounty.title}</h3>
+            <span className="font-mono text-xs text-zinc-600">#{bounty.id.slice(0, 8)}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-600">
+            <span className="font-mono text-zinc-400">
+              {bounty.repo_owner.slice(8, 16)}.../{bounty.repo_name}
+            </span>
+            <span>-</span>
+            <span className="font-medium text-green-400">
+              {bounty.amount.toLocaleString()} $GITLAWB
+            </span>
+            <span>-</span>
+            <span>{new Date(bounty.created_at).toLocaleDateString()}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-3 font-mono text-xs text-zinc-700">
+            <span>creator: {bounty.creator_did.slice(8, 20)}...</span>
+            {bounty.claimant_did && (
+              <span>claimant: {bounty.claimant_did.slice(8, 20)}...</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`rounded-full border px-2 py-1 font-mono text-xs ${statusColor}`}>
+            {bounty.status}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function CreateBountyModal({
   onClose,
   onCreate,
@@ -403,7 +512,7 @@ function CreateBountyModal({
   onClose: () => void;
   onCreate: () => void;
   profileId: string | undefined;
-  activeTab: "onchain" | "offchain";
+  activeTab: "onchain" | "offchain" | "gitlawb";
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
