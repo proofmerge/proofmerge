@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { getAgents, getRepos } from "@/lib/gitlawb/client";
 
 interface SearchResult {
-  type: "profile" | "bounty" | "agent" | "repo" | "badge";
+  type: "profile" | "bounty" | "agent" | "repo";
   id: string;
   title: string;
   subtitle: string;
@@ -20,95 +19,120 @@ export default function SearchBar() {
   const [loading, setLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
-  const search = useCallback(async (q: string) => {
-    setLoading(true);
-    try {
-      const [profiles, bounties, agents, repos] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, did, display_name")
-          .or(`display_name.ilike.%${q}%,did.ilike.%${q}%`)
-          .limit(5),
-        supabase
-          .from("bounties")
-          .select("id, title, repo, status")
-          .or(`title.ilike.%${q}%,repo.ilike.%${q}%`)
-          .limit(5),
-        getAgents(50).then((all) =>
-          all.filter(
-            (a) =>
-              a.did.toLowerCase().includes(q.toLowerCase()) ||
-              a.name.toLowerCase().includes(q.toLowerCase())
-          )
-        ),
-        getRepos().then((all) =>
-          all.filter(
-            (r) =>
-              r.name.toLowerCase().includes(q.toLowerCase()) ||
-              r.owner.toLowerCase().includes(q.toLowerCase()) ||
-              (r.description || "").toLowerCase().includes(q.toLowerCase())
-          )
-        ),
-      ]);
-
-      const profileResults: SearchResult[] = (profiles.data || []).map(
-        (p) => ({
-          type: "profile" as const,
-          id: p.id,
-          title: p.display_name || "Anonymous",
-          subtitle: p.did,
-          url: `/profile/${encodeURIComponent(p.did)}`,
-        })
-      );
-
-      const bountyResults: SearchResult[] = (bounties.data || []).map(
-        (b) => ({
-          type: "bounty" as const,
-          id: b.id.toString(),
-          title: b.title,
-          subtitle: `${b.repo} • ${b.status}`,
-          url: "/bounties",
-        })
-      );
-
-      const agentResults: SearchResult[] = agents.slice(0, 5).map((a) => ({
-        type: "agent" as const,
-        id: a.did,
-        title: a.name,
-        subtitle: `Trust: ${a.trustScore.toFixed(2)} • ${a.did.slice(0, 30)}...`,
-        url: `/profile/${encodeURIComponent(a.did)}`,
-      }));
-
-      const repoResults: SearchResult[] = repos.slice(0, 5).map((r) => ({
-        type: "repo" as const,
-        id: `${r.owner}/${r.name}`,
-        title: `${r.owner}/${r.name}`,
-        subtitle: r.description || "No description",
-        url: "/stats",
-      }));
-
-      setResults([
-        ...agentResults,
-        ...repoResults,
-        ...profileResults,
-        ...bountyResults,
-      ]);
-    } catch (err) {
-      console.error("Search error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
       return;
     }
 
-    const timer = setTimeout(() => void search(query), 300);
+    const timer = setTimeout(() => {
+      void search(query);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [query, search]);
+  }, [query]);
+
+  async function search(q: string) {
+    setLoading(true);
+    const allResults: SearchResult[] = [];
+
+    try {
+      // Search Supabase profiles
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, did, display_name")
+        .or(`display_name.ilike.%${q}%,did.ilike.%${q}%`)
+        .limit(3);
+
+      if (profiles) {
+        for (const p of profiles) {
+          allResults.push({
+            type: "profile",
+            id: p.id,
+            title: p.display_name || "Anonymous",
+            subtitle: p.did,
+            url: `/profile/${encodeURIComponent(p.did)}`,
+          });
+        }
+      }
+
+      // Search Supabase bounties
+      const { data: bounties } = await supabase
+        .from("bounties")
+        .select("id, title, repo, status")
+        .or(`title.ilike.%${q}%,repo.ilike.%${q}%`)
+        .limit(3);
+
+      if (bounties) {
+        for (const b of bounties) {
+          allResults.push({
+            type: "bounty",
+            id: b.id.toString(),
+            title: b.title,
+            subtitle: `${b.repo} • ${b.status}`,
+            url: "/bounties",
+          });
+        }
+      }
+
+      // Search gitlawb agents (fetch 10, filter locally)
+      try {
+        const res = await fetch(
+          `https://node.gitlawb.com/api/v1/agents?limit=10`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const agents = data.agents || [];
+          const filtered = agents.filter(
+            (a: { did: string }) =>
+              a.did.toLowerCase().includes(q.toLowerCase())
+          );
+          for (const a of filtered.slice(0, 3)) {
+            allResults.push({
+              type: "agent",
+              id: a.did,
+              title: a.did.slice(8, 20) + "...",
+              subtitle: `Trust: ${a.trust_score.toFixed(2)}`,
+              url: `/profile/${encodeURIComponent(a.did)}`,
+            });
+          }
+        }
+      } catch {
+        // ignore gitlawb errors
+      }
+
+      // Search gitlawb repos (fetch 10, filter locally)
+      try {
+        const res = await fetch(
+          `https://node.gitlawb.com/api/v1/repos?limit=10`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const repos = Array.isArray(data) ? data : [];
+          const filtered = repos.filter(
+            (r: { name: string; owner_did: string }) =>
+              r.name.toLowerCase().includes(q.toLowerCase()) ||
+              r.owner_did.toLowerCase().includes(q.toLowerCase())
+          );
+          for (const r of filtered.slice(0, 3)) {
+            allResults.push({
+              type: "repo",
+              id: r.id || r.name,
+              title: `${r.owner_did.slice(8, 20)}.../${r.name}`,
+              subtitle: r.description || "gitlawb repo",
+              url: "/stats",
+            });
+          }
+        }
+      } catch {
+        // ignore gitlawb errors
+      }
+    } catch (err) {
+      console.error("Search error:", err);
+    }
+
+    setResults(allResults);
+    setLoading(false);
+  }
 
   function handleSelect(result: SearchResult) {
     router.push(result.url);
@@ -121,7 +145,6 @@ export default function SearchBar() {
     repo: "📁",
     profile: "👤",
     bounty: "💰",
-    badge: "🏅",
   };
 
   return (
@@ -130,11 +153,7 @@ export default function SearchBar() {
         type="text"
         value={query}
         onChange={(e) => {
-          const nextQuery = e.target.value;
-          setQuery(nextQuery);
-          if (nextQuery.length < 2) {
-            setResults([]);
-          }
+          setQuery(e.target.value);
           setShowResults(true);
         }}
         onFocus={() => setShowResults(true)}
