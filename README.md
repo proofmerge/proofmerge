@@ -215,6 +215,5 @@ MIT
 ## Acknowledgments
 
 - [gitlawb](https://gitlawb.com) — Decentralized git network
-- [gitlawbounty.xyz](https://gitlawbounty.xyz) — Bounty terminal for gitlawb
 - [Base](https://base.org) — L2 network
 - [Supabase](https://supabase.com) — Database & Auth
