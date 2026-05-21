@@ -22,18 +22,73 @@ async function fetchJson<T>(endpoint: string): Promise<T> {
 }
 
 export async function getNetworkEvents(): Promise<GitlawbEvent[]> {
-  const data = await fetchJson<{ events: GitlawbEvent[] }>("/network-events");
-  return data.events || [];
+  // Events endpoint returns empty from gitlawbounty.xyz
+  // Return mock events for now - real events require direct node access
+  return [];
 }
 
-export async function getAgents(): Promise<GitlawbAgent[]> {
-  const data = await fetchJson<{ agents: GitlawbAgent[] }>("/agents");
-  return data.agents || [];
+export async function getAgents(limit = 10, offset = 0): Promise<GitlawbAgent[]> {
+  const data = await fetchJson<{
+    agents: Array<{
+      did: string;
+      fullDid: string;
+      capabilities: string[];
+      trustScore: number;
+      registeredAt: string;
+      lastSeen: string | null;
+      profileUrl: string;
+    }>;
+    count: number;
+    totalCount: number;
+  }>(`/network-agents?limit=${limit}&offset=${offset}`);
+
+  return (data.agents || []).map((a) => ({
+    did: a.fullDid,
+    name: a.did.slice(0, 12) + "...",
+    trustScore: a.trustScore,
+    trustLevel: getTrustLevel(a.trustScore),
+    pushes: 0,
+    repos: 0,
+    publicKey: {
+      id: a.fullDid,
+      type: "Ed25519VerificationKey2020",
+      publicKeyMultibase: a.did,
+    },
+  }));
+}
+
+function getTrustLevel(score: number): string {
+  if (score >= 0.8) return "excellent";
+  if (score >= 0.6) return "good";
+  if (score >= 0.4) return "moderate";
+  if (score >= 0.2) return "low";
+  return "new";
 }
 
 export async function getRepos(): Promise<GitlawbRepo[]> {
-  const data = await fetchJson<{ repos: GitlawbRepo[] }>("/repos");
-  return data.repos || [];
+  const data = await fetchJson<
+    Array<{
+      owner: string;
+      name: string;
+      url: string;
+      description: string | null;
+      starCount: number;
+      updatedAt: string;
+      updatedAgo: string;
+      bountyCount: number;
+      totalReward: number;
+    }>
+  >("/repos");
+
+  return data.map((r) => ({
+    name: r.name,
+    owner: r.owner,
+    description: r.description || undefined,
+    lastActivity: r.updatedAt,
+    commits: 0,
+    issues: 0,
+    prs: 0,
+  }));
 }
 
 export async function getNetworkStats(): Promise<GitlawbNetworkStats> {
