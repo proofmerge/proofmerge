@@ -2,8 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useAccount } from "wagmi";
 import { supabase } from "@/lib/supabase/client";
+import { useHasBadge } from "@/lib/contracts";
 import type { Profile, Badge, Bounty } from "@/lib/supabase/types";
+
+const BADGE_NAMES: Record<number, { name: string; icon: string }> = {
+  1: { name: "First Contribution", icon: "🎉" },
+  2: { name: "Bug Hunter", icon: "🐛" },
+  3: { name: "Top Reviewer", icon: "👀" },
+  4: { name: "Prolific Coder", icon: "💻" },
+  5: { name: "Agent Master", icon: "🤖" },
+  6: { name: "Bounty Hunter", icon: "💰" },
+};
+
+function extractAddress(did: string): string | null {
+  if (did.startsWith("did:ethr:")) {
+    return did.replace("did:ethr:", "");
+  }
+  return null;
+}
 
 export default function ProfilePage() {
   const params = useParams();
@@ -12,6 +30,7 @@ export default function ProfilePage() {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
+  const walletAddress = extractAddress(did);
 
   useEffect(() => {
     fetchProfile();
@@ -115,7 +134,12 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Badges */}
+      {/* On-Chain Badges */}
+      {walletAddress && (
+        <OnChainBadgesSection address={walletAddress} />
+      )}
+
+      {/* Off-Chain Badges */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-4">
           Badges ({badges.length})
@@ -181,6 +205,53 @@ export default function ProfilePage() {
         ) : (
           <p className="text-gray-400 text-sm">No bounties yet</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function OnChainBadgesSection({ address }: { address: string }) {
+  const [onChainBadges, setOnChainBadges] = useState<
+    { id: number; name: string; icon: string }[]
+  >([]);
+
+  // Check each badge
+  const { data: has1 } = useHasBadge(address, 1);
+  const { data: has2 } = useHasBadge(address, 2);
+  const { data: has3 } = useHasBadge(address, 3);
+  const { data: has4 } = useHasBadge(address, 4);
+  const { data: has5 } = useHasBadge(address, 5);
+  const { data: has6 } = useHasBadge(address, 6);
+
+  useEffect(() => {
+    const badges = [];
+    if (has1) badges.push({ id: 1, ...BADGE_NAMES[1] });
+    if (has2) badges.push({ id: 2, ...BADGE_NAMES[2] });
+    if (has3) badges.push({ id: 3, ...BADGE_NAMES[3] });
+    if (has4) badges.push({ id: 4, ...BADGE_NAMES[4] });
+    if (has5) badges.push({ id: 5, ...BADGE_NAMES[5] });
+    if (has6) badges.push({ id: 6, ...BADGE_NAMES[6] });
+    setOnChainBadges(badges);
+  }, [has1, has2, has3, has4, has5, has6]);
+
+  if (onChainBadges.length === 0) return null;
+
+  return (
+    <div className="bg-gray-900 border border-purple-500/30 rounded-xl p-6">
+      <h2 className="text-lg font-semibold text-white mb-4">
+        On-Chain Badges ({onChainBadges.length})
+      </h2>
+      <div className="grid grid-cols-3 gap-3">
+        {onChainBadges.map((badge) => (
+          <div
+            key={badge.id}
+            className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-center"
+          >
+            <div className="text-2xl mb-1">{badge.icon}</div>
+            <div className="text-sm font-medium text-white">{badge.name}</div>
+            <div className="text-xs text-purple-400 mt-1">Verified on-chain</div>
+          </div>
+        ))}
       </div>
     </div>
   );
