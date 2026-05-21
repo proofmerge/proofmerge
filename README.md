@@ -69,7 +69,7 @@ Search across agents, repos, and bounties in real-time.
 | **Database** | Supabase (PostgreSQL) |
 | **Smart Contracts** | Solidity 0.8 + Foundry |
 | **Network** | Base Sepolia (testnet) |
-| **Data Source** | gitlawb network via gitlawbounty.xyz API |
+| **Data Source** | gitlawb node API (node.gitlawb.com) |
 
 ---
 
@@ -93,7 +93,7 @@ Search across agents, repos, and bounties in real-time.
 │  External Services                                          │
 │  ├── Supabase (PostgreSQL + Realtime)                      │
 │  ├── Base Sepolia (smart contracts)                        │
-│  └── gitlawbounty.xyz API (gitlawb proxy)                  │
+│  └── gitlawb Node API (node.gitlawb.com)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
