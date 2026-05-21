@@ -50,8 +50,8 @@ export async function GET() {
 
     const totals = nodes.reduce(
       (acc, n) => ({
-        agents: Math.max(acc.agents, n.agents),
-        repos: acc.repos + n.repos,
+        agents: acc.agents + n.agents,
+        repos: Math.max(acc.repos, n.repos),
         pushes: acc.pushes + n.pushes,
         peers: Math.max(acc.peers, n.peers),
       }),

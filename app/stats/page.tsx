@@ -23,38 +23,45 @@ export default function StatsPage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      // Try cached data first (fast), fallback to live API
-      const [cachedStats, cachedRepos, cachedAgents] = await Promise.all([
+      const [overviewData, peersData, cachedStats, cachedRepos, cachedAgents] = await Promise.all([
+        getNetworkOverview(),
+        getPeers(),
         getCachedStats(),
         getCachedRepos(10),
         getCachedAgents(10),
       ]);
 
       const hasCachedData = cachedStats.agents > 0;
+      setOverview(overviewData);
+      setPeers(peersData);
+
+      if (overviewData.totals.agents > 0 || overviewData.totals.repos > 0) {
+        setNetworkStats({
+          nodes: overviewData.online,
+          agents: overviewData.totals.agents,
+          repos: overviewData.totals.repos,
+          commits24h: overviewData.totals.pushes,
+          issues24h: 0,
+          prs24h: 0,
+        });
+      } else if (hasCachedData) {
+        setNetworkStats(cachedStats);
+      } else {
+        const stats = await getNetworkStats();
+        setNetworkStats(stats);
+      }
 
       if (hasCachedData) {
-        setNetworkStats(cachedStats);
         setRepos(cachedRepos);
         setAgents(cachedAgents);
       } else {
-        // Fallback to live API if no cached data
-        const [stats, reposData, agentsData] = await Promise.all([
-          getNetworkStats(),
+        const [reposData, agentsData] = await Promise.all([
           getRepos(),
           getAgents(10),
         ]);
-        setNetworkStats(stats);
         setRepos(reposData.slice(0, 10));
         setAgents(agentsData.slice(0, 10));
       }
-
-      // Peers and overview always from live API (small response)
-      const [peersData, overviewData] = await Promise.all([
-        getPeers(),
-        getNetworkOverview(),
-      ]);
-      setPeers(peersData);
-      setOverview(overviewData);
     } catch (err) {
       console.error("Error fetching stats:", err);
     } finally {
@@ -64,6 +71,9 @@ export default function StatsPage() {
 
   useEffect(() => {
     queueMicrotask(() => void fetchStats());
+    const timer = window.setInterval(() => void fetchStats(), 15000);
+
+    return () => window.clearInterval(timer);
   }, [fetchStats]);
 
   if (loading) {
@@ -94,7 +104,7 @@ export default function StatsPage() {
         <StatsCard label="Agents" value={networkStats?.agents || 0} code="AI" />
         <StatsCard label="Repos" value={networkStats?.repos || 0} code="RP" />
         <StatsCard label="Pushes" value={networkStats?.commits24h || 0} code="PS" />
-        <StatsCard label="Peers" value={peers.length} code="PN" />
+        <StatsCard label="Peers" value={overview?.totals.peers || peers.length} code="PN" />
         <StatsCard label="Bounties" value={realtimeStats.bounties} code="BO" />
       </section>
 

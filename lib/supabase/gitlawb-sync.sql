@@ -52,6 +52,7 @@ DROP POLICY IF EXISTS "Anyone can update agents" ON gitlawb_agents;
 DROP POLICY IF EXISTS "Anyone can insert repos" ON gitlawb_repos;
 DROP POLICY IF EXISTS "Anyone can update repos" ON gitlawb_repos;
 DROP POLICY IF EXISTS "Anyone can upsert stats" ON gitlawb_stats;
+DROP POLICY IF EXISTS "Anyone can update stats" ON gitlawb_stats;
 
 -- Public read access
 CREATE POLICY "Agents are viewable by everyone"
@@ -85,4 +86,9 @@ CREATE POLICY "Anyone can update repos"
 
 CREATE POLICY "Anyone can upsert stats"
   ON gitlawb_stats FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Anyone can update stats"
+  ON gitlawb_stats FOR UPDATE
+  USING (true)
   WITH CHECK (true);

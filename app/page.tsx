@@ -1,11 +1,21 @@
 import Link from "next/link";
+import LiveGitEvents from "@/components/home/LiveGitEvents";
+import LiveLatestRepos from "@/components/home/LiveLatestRepos";
+import LiveRefresh from "@/components/shared/LiveRefresh";
+import SearchBar from "@/components/shared/SearchBar";
 import { supabase } from "@/lib/supabase/client";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
+
+const GITLAWB_NODES = [
+  "https://node.gitlawb.com/api/v1",
+  "https://node2.gitlawb.com/api/v1",
+  "https://node3.gitlawb.com/api/v1",
+];
 
 async function fetchCachedData() {
   try {
-    const [agentsResult, reposResult, statsResult] = await Promise.all([
+    const [agentsResult, reposResult, statsResult, liveStats] = await Promise.all([
       supabase
         .from("gitlawb_agents")
         .select("did, trust_score")
@@ -21,11 +31,13 @@ async function fetchCachedData() {
         .select("agents, repos, pushes, version")
         .eq("id", "network")
         .single(),
+      fetchLiveNetworkStats(),
     ]);
 
     const agents = agentsResult.data || [];
     const repos = reposResult.data || [];
-    const stats = statsResult.data || { agents: 0, repos: 0, pushes: 0, version: "unknown" };
+    const cachedStats = statsResult.data || { agents: 0, repos: 0, pushes: 0, version: "unknown" };
+    const stats = liveStats.agents > 0 ? liveStats : cachedStats;
 
     return { stats, repos, agents };
   } catch {
@@ -34,6 +46,52 @@ async function fetchCachedData() {
       repos: [],
       agents: [],
     };
+  }
+}
+
+async function fetchLiveNetworkStats() {
+  try {
+    const results = await Promise.allSettled(
+      GITLAWB_NODES.map(async (nodeUrl) => {
+        const res = await fetch(`${nodeUrl}/stats`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+
+        if (!res.ok) {
+          throw new Error(`node stats failed: ${res.status}`);
+        }
+
+        return res.json() as Promise<{
+          agents?: number;
+          repos?: number;
+          pushes?: number;
+          version?: string;
+        }>;
+      })
+    );
+
+    const nodes = results
+      .filter((result): result is PromiseFulfilledResult<{
+        agents?: number;
+        repos?: number;
+        pushes?: number;
+        version?: string;
+      }> => result.status === "fulfilled")
+      .map((result) => result.value);
+
+    if (nodes.length === 0) {
+      return { agents: 0, repos: 0, pushes: 0, version: "unknown" };
+    }
+
+    return {
+      agents: nodes.reduce((sum, node) => sum + (node.agents || 0), 0),
+      repos: Math.max(...nodes.map((node) => node.repos || 0)),
+      pushes: nodes.reduce((sum, node) => sum + (node.pushes || 0), 0),
+      version: nodes[0]?.version || "unknown",
+    };
+  } catch {
+    return { agents: 0, repos: 0, pushes: 0, version: "unknown" };
   }
 }
 
@@ -71,45 +129,6 @@ export default async function Home() {
     repos: 0,
   }));
 
-  const latestEvents = [
-    {
-      type: "Agent",
-      hash: "0xddcf...9408",
-      action: "claude-agent-47 pushed 3 commits",
-      from: "z6MkAgent...47",
-      to: "gitlawb/explorer",
-      value: "3 commits",
-      age: "13 secs ago",
-    },
-    {
-      type: "PR",
-      hash: "0x0cb3...8586",
-      action: "dev-satoshi opened pull request",
-      from: "z6MkDev...A91",
-      to: "gitlawb/contracts",
-      value: "review",
-      age: "18 secs ago",
-    },
-    {
-      type: "Issue",
-      hash: "0x7d35...f7a1",
-      action: "agent-coder created issue",
-      from: "z6MkCode...730",
-      to: "gitlawb/node",
-      value: "bug",
-      age: "31 secs ago",
-    },
-    {
-      type: "Badge",
-      hash: "0x2562...a83e",
-      action: "First Contribution badge minted",
-      from: "ProofMergeBadge",
-      to: "dev-ada.base",
-      value: "ERC-1155",
-      age: "44 secs ago",
-    },
-  ];
-
   const bounties = [
     { title: "Fix firehose connector leak", repo: "gitlawb/node", amount: "$50 USDC" },
     { title: "Add badge eligibility proof", repo: "gitlawb/contracts", amount: "$125 USDC" },
@@ -118,6 +137,7 @@ export default async function Home() {
 
   return (
     <div className="space-y-4">
+      <LiveRefresh intervalMs={10000} />
       <section className="rounded-lg border border-green-500/20 bg-black p-4 shadow-[0_0_40px_rgba(34,197,94,0.08)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -141,27 +161,7 @@ export default async function Home() {
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-2 rounded-lg border border-green-500/20 bg-zinc-950 p-2 md:flex-row">
-          <select
-            aria-label="Search filter"
-            className="h-11 rounded-md border border-green-500/20 bg-black px-3 text-sm text-zinc-300 outline-none focus:border-green-400"
-            defaultValue="all"
-          >
-            <option value="all">All Filters</option>
-            <option value="did">DID</option>
-            <option value="repo">Repo</option>
-            <option value="commit">Commit</option>
-            <option value="bounty">Bounty</option>
-          </select>
-          <input
-            aria-label="Explorer search"
-            className="h-11 min-w-0 flex-1 rounded-md border border-green-500/20 bg-black px-4 font-mono text-sm text-green-100 outline-none placeholder:text-zinc-700 focus:border-green-400"
-            placeholder="Search by DID / repo / tx hash / badge / bounty"
-          />
-          <button className="h-11 rounded-md bg-green-500 px-5 text-sm font-semibold text-black transition hover:bg-green-400">
-            Search
-          </button>
-        </div>
+        <HeroSearch />
       </section>
 
       <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-5">
@@ -176,56 +176,11 @@ export default async function Home() {
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1.15fr]">
         <ExplorerPanel title="Latest Repos" action="View all repos" href="/stats">
-          <div className="divide-y divide-green-500/10">
-            {latestRepos.length > 0 ? latestRepos.map((repo: { id: string; name: string; owner: string; activity: string; metric: string; age: string }) => (
-              <div key={repo.id} className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[88px_1fr_auto] sm:items-center">
-                <div className="flex items-center gap-2">
-                  <span className="grid h-8 w-8 place-items-center rounded-md border border-green-500/20 bg-green-500/10 font-mono text-xs text-green-300">
-                    R
-                  </span>
-                  <div className="font-mono text-xs text-green-400">{repo.id}</div>
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-zinc-100">{repo.name}</p>
-                  <p className="mt-1 truncate text-xs text-zinc-500">
-                    Owner <span className="font-mono text-zinc-300">{repo.owner}</span> - {repo.activity}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
-                  <p className="font-mono text-xs text-green-200">{repo.metric}</p>
-                  <p className="mt-1 text-xs text-zinc-600">{repo.age}</p>
-                </div>
-              </div>
-            )) : (
-              <div className="px-4 py-6 text-center text-sm text-zinc-500">No repos cached yet</div>
-            )}
-          </div>
+          <LiveLatestRepos initialRepos={latestRepos} />
         </ExplorerPanel>
 
         <ExplorerPanel title="Latest Git Events" action="View all events" href="/theater">
-          <div className="divide-y divide-green-500/10">
-            {latestEvents.map((event) => (
-              <div key={event.hash} className="grid gap-3 px-4 py-3 text-sm lg:grid-cols-[96px_1fr_88px] lg:items-center">
-                <div>
-                  <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-1 text-xs text-green-300">
-                    {event.type}
-                  </span>
-                  <p className="mt-2 font-mono text-xs text-green-400">{event.hash}</p>
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-zinc-100">{event.action}</p>
-                  <p className="mt-1 truncate text-xs text-zinc-500">
-                    From <span className="font-mono text-zinc-300">{event.from}</span> to{" "}
-                    <span className="font-mono text-zinc-300">{event.to}</span>
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-3 lg:block lg:text-right">
-                  <p className="font-mono text-xs text-green-200">{event.value}</p>
-                  <p className="mt-1 text-xs text-zinc-600">{event.age}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <LiveGitEvents />
         </ExplorerPanel>
       </section>
 
@@ -277,6 +232,19 @@ export default async function Home() {
           </div>
         </ExplorerPanel>
       </section>
+    </div>
+  );
+}
+
+function HeroSearch() {
+  return (
+    <div className="mt-5 rounded-lg border border-green-500/20 bg-zinc-950 p-2">
+      <SearchBar
+        showButton
+        className="w-full"
+        inputClassName="h-11 bg-black px-4"
+        placeholder="Search by DID / repo / tx hash / badge / bounty"
+      />
     </div>
   );
 }
