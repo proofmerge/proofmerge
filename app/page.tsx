@@ -3,7 +3,7 @@ import Link from "next/link";
 const networkStats = [
   { label: "Agents", value: "31,804", detail: "+128 today" },
   { label: "Repos", value: "3,799", detail: "27 trending" },
-  { label: "Nodes", value: "3", detail: "Base Sepolia" },
+  { label: "Pushes", value: "6,470", detail: "total pushes" },
   { label: "Bounties", value: "32", detail: "$8.4K open" },
   { label: "Commits 24h", value: "12,481", detail: "94% verified" },
   { label: "PRs 24h", value: "247", detail: "61 merged" },

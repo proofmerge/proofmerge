@@ -64,7 +64,7 @@ export default function StatsPage() {
       <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-4">
         <StatsCard label="Agents" value={networkStats?.agents || 0} code="AI" />
         <StatsCard label="Repos" value={networkStats?.repos || 0} code="RP" />
-        <StatsCard label="Nodes" value={networkStats?.nodes || 0} code="ND" />
+        <StatsCard label="Pushes" value={networkStats?.commits24h || 0} code="PS" />
         <StatsCard label="Bounties" value={realtimeStats.bounties} code="BO" />
       </section>
 
