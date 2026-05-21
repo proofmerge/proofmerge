@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import WalletButton from "@/components/shared/WalletButton";
 
 export default function Header() {
   return (
@@ -42,9 +43,7 @@ export default function Header() {
           <button className="rounded-md border border-green-500/20 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 transition hover:border-green-400 hover:text-green-300">
             Base Sepolia
           </button>
-          <button className="rounded-md bg-green-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-green-400">
-            Connect
-          </button>
+          <WalletButton />
         </div>
       </div>
     </header>

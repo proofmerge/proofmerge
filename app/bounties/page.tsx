@@ -1,22 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAccount } from "wagmi";
+import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "viem";
-import { useAuth } from "@/lib/hooks/useAuth";
-import { supabase } from "@/lib/supabase/client";
+import { useAccount } from "wagmi";
 import {
+  useApproveToken,
   useBounties,
   useBountyCount,
+  useCancelBounty,
   useClaimBounty,
   useCompleteBounty,
-  useCancelBounty,
   useCreateBounty,
-  useApproveToken,
 } from "@/lib/contracts";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { supabase } from "@/lib/supabase/client";
 import type { Bounty } from "@/lib/supabase/types";
 
-// Status mapping from contract enum
 const STATUS_MAP: Record<number, string> = {
   0: "open",
   1: "claimed",
@@ -44,31 +43,20 @@ export default function BountiesPage() {
   const { address } = useAccount();
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<
-    "all" | "open" | "claimed" | "completed"
-  >("all");
+  const [filter, setFilter] = useState<"all" | "open" | "claimed" | "completed">("all");
   const [showCreate, setShowCreate] = useState(false);
   const [activeTab, setActiveTab] = useState<"onchain" | "offchain">("onchain");
 
-  // On-chain bounties
   const { data: bountyCount } = useBountyCount();
   const { data: onChainBounties, refetch: refetchOnChain } = useBounties(
     BigInt(0),
     bountyCount || BigInt(20)
   );
 
-  useEffect(() => {
-    if (activeTab === "offchain") {
-      fetchBounties();
-    }
-  }, [filter, activeTab]);
-
-  async function fetchBounties() {
+  const fetchBounties = useCallback(async () => {
     try {
       let query = supabase.from("bounties").select("*");
-      if (filter !== "all") {
-        query = query.eq("status", filter);
-      }
+      if (filter !== "all") query = query.eq("status", filter);
       const { data } = await query.order("created_at", { ascending: false });
       setBounties(data || []);
     } catch (err) {
@@ -76,85 +64,75 @@ export default function BountiesPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filter]);
 
-  const filteredOnChainBounties = (onChainBounties as OnChainBounty[] || []).filter(
-    (b) => {
-      if (filter === "all") return true;
-      return STATUS_MAP[Number(b.status)] === filter;
-    }
+  useEffect(() => {
+    if (activeTab === "offchain") queueMicrotask(() => void fetchBounties());
+  }, [activeTab, fetchBounties]);
+
+  const filteredOnChainBounties = ((onChainBounties as OnChainBounty[]) || []).filter(
+    (bounty) => filter === "all" || STATUS_MAP[Number(bounty.status)] === filter
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <section className="flex flex-col gap-4 rounded-lg border border-green-500/20 bg-black p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Bounty Board</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Discover and claim crypto bounties on gitlawb issues
+          <p className="font-mono text-xs uppercase tracking-wide text-green-400">
+            [ bounty board ]
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold text-white">Bounty Board</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Discover and claim crypto bounties on gitlawb issues.
           </p>
         </div>
         {isConnected && (
           <button
             onClick={() => setShowCreate(true)}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
+            className="rounded-md bg-green-600 px-4 py-2 text-sm text-white transition hover:bg-green-500"
           >
             Create Bounty
           </button>
         )}
-      </div>
+      </section>
 
-      {/* Tab Switch */}
-      <div className="flex gap-1 bg-gray-800 rounded-lg p-1 w-fit">
-        <button
-          onClick={() => setActiveTab("onchain")}
-          className={`px-4 py-2 text-sm rounded-md transition-colors ${
-            activeTab === "onchain"
-              ? "bg-purple-600 text-white"
-              : "text-gray-400 hover:text-white"
-          }`}
-        >
-          On-Chain ({Number(bountyCount || 0)})
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("offchain");
-            setLoading(true);
-          }}
-          className={`px-4 py-2 text-sm rounded-md transition-colors ${
-            activeTab === "offchain"
-              ? "bg-purple-600 text-white"
-              : "text-gray-400 hover:text-white"
-          }`}
-        >
-          Off-Chain
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-2">
-        {(["all", "open", "claimed", "completed"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              filter === f
-                ? "bg-purple-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:text-white"
-            }`}
+      <section className="flex flex-wrap items-center gap-3">
+        <div className="flex w-fit gap-1 rounded-lg border border-green-500/20 bg-black p-1">
+          <TabButton active={activeTab === "onchain"} onClick={() => setActiveTab("onchain")}>
+            On-Chain ({Number(bountyCount || 0)})
+          </TabButton>
+          <TabButton
+            active={activeTab === "offchain"}
+            onClick={() => {
+              setActiveTab("offchain");
+              setLoading(true);
+            }}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-          </button>
-        ))}
-      </div>
+            Off-Chain
+          </TabButton>
+        </div>
 
-      {/* On-Chain Bounties */}
+        <div className="flex flex-wrap gap-2">
+          {(["all", "open", "claimed", "completed"] as const).map((nextFilter) => (
+            <button
+              key={nextFilter}
+              onClick={() => setFilter(nextFilter)}
+              className={`rounded-md border px-3 py-1.5 text-sm transition ${
+                filter === nextFilter
+                  ? "border-green-500/40 bg-green-500/10 text-green-300"
+                  : "border-green-500/15 bg-black text-zinc-500 hover:border-green-500/30 hover:text-zinc-100"
+              }`}
+            >
+              {nextFilter.charAt(0).toUpperCase() + nextFilter.slice(1)}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {activeTab === "onchain" && (
-        <div className="space-y-3">
+        <section className="space-y-3">
           {filteredOnChainBounties.length === 0 ? (
-            <div className="text-center text-gray-400 py-8">
-              No on-chain bounties found
-            </div>
+            <EmptyState>No on-chain bounties found</EmptyState>
           ) : (
             filteredOnChainBounties.map((bounty) => (
               <OnChainBountyCard
@@ -165,18 +143,15 @@ export default function BountiesPage() {
               />
             ))
           )}
-        </div>
+        </section>
       )}
 
-      {/* Off-Chain Bounties */}
       {activeTab === "offchain" && (
-        <div className="space-y-3">
+        <section className="space-y-3">
           {loading ? (
-            <div className="text-center text-gray-400 py-8">Loading...</div>
+            <EmptyState>Loading...</EmptyState>
           ) : bounties.length === 0 ? (
-            <div className="text-center text-gray-400 py-8">
-              No off-chain bounties found
-            </div>
+            <EmptyState>No off-chain bounties found</EmptyState>
           ) : (
             bounties.map((bounty) => (
               <BountyCard
@@ -187,10 +162,9 @@ export default function BountiesPage() {
               />
             ))
           )}
-        </div>
+        </section>
       )}
 
-      {/* Create Modal */}
       {showCreate && (
         <CreateBountyModal
           onClose={() => setShowCreate(false)}
@@ -202,6 +176,37 @@ export default function BountiesPage() {
           activeTab={activeTab}
         />
       )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-4 py-2 text-sm transition ${
+        active
+          ? "bg-green-500/15 text-green-300 ring-1 ring-green-500/20"
+          : "text-zinc-500 hover:text-zinc-100"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-green-500/20 bg-black py-8 text-center font-mono text-sm text-zinc-500">
+      {children}
     </div>
   );
 }
@@ -218,102 +223,66 @@ function OnChainBountyCard({
   const { claimBounty, isPending: isClaiming, isSuccess: claimSuccess } = useClaimBounty();
   const { completeBounty, isPending: isCompleting } = useCompleteBounty();
   const { cancelBounty, isPending: isCancelling } = useCancelBounty();
-  const [txPending, setTxPending] = useState(false);
 
   const status = STATUS_MAP[Number(bounty.status)] || "unknown";
   const isCreator =
-    userAddress &&
-    bounty.creator.toLowerCase() === userAddress.toLowerCase();
-  const isClaimer =
-    userAddress &&
-    bounty.claimer.toLowerCase() === userAddress.toLowerCase();
+    userAddress && bounty.creator.toLowerCase() === userAddress.toLowerCase();
 
   useEffect(() => {
-    if (claimSuccess) {
-      setTxPending(false);
-      onAction();
-    }
-  }, [claimSuccess]);
-
-  function handleClaim() {
-    setTxPending(true);
-    claimBounty(bounty.id);
-  }
-
-  function handleComplete() {
-    completeBounty(bounty.id);
-  }
-
-  function handleCancel() {
-    cancelBounty(bounty.id);
-  }
+    if (claimSuccess) onAction();
+  }, [claimSuccess, onAction]);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
+    <article className="rounded-lg border border-green-500/20 bg-black p-4 transition hover:border-green-500/40">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-medium text-white">{bounty.title}</h3>
-            <span className="text-xs text-gray-500">#{Number(bounty.id)}</span>
+            <span className="font-mono text-xs text-zinc-600">#{Number(bounty.id)}</span>
           </div>
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-600">
             <span>{bounty.repo}</span>
-            <span>•</span>
-            <span className="text-green-400 font-medium">
+            <span>-</span>
+            <span className="font-medium text-green-400">
               {formatUnits(bounty.amount, 6)} USDC
             </span>
-            <span>•</span>
-            <span>
-              {new Date(Number(bounty.createdAt) * 1000).toLocaleDateString()}
-            </span>
+            <span>-</span>
+            <span>{new Date(Number(bounty.createdAt) * 1000).toLocaleDateString()}</span>
           </div>
-          <div className="mt-1 text-xs text-gray-600">
-            Creator: {bounty.creator.slice(0, 6)}...{bounty.creator.slice(-4)}
-          </div>
+          <p className="mt-2 font-mono text-xs text-zinc-700">
+            creator: {bounty.creator.slice(0, 6)}...{bounty.creator.slice(-4)}
+          </p>
           {bounty.claimer !== "0x0000000000000000000000000000000000000000" && (
-            <div className="text-xs text-gray-600">
-              Claimer: {bounty.claimer.slice(0, 6)}...{bounty.claimer.slice(-4)}
-            </div>
+            <p className="font-mono text-xs text-zinc-700">
+              claimer: {bounty.claimer.slice(0, 6)}...{bounty.claimer.slice(-4)}
+            </p>
           )}
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <span
-            className={`px-2 py-1 text-xs rounded-full ${
-              status === "open"
-                ? "bg-green-500/20 text-green-400"
-                : status === "claimed"
-                  ? "bg-yellow-500/20 text-yellow-400"
-                  : status === "completed"
-                    ? "bg-blue-500/20 text-blue-400"
-                    : "bg-gray-500/20 text-gray-400"
-            }`}
-          >
-            {status}
-          </span>
+
+        <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+          <StatusPill status={status} />
           <div className="flex gap-2">
             {status === "open" && !isCreator && userAddress && (
-              <button
-                onClick={handleClaim}
-                disabled={isClaiming || txPending}
-                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+              <ActionButton
+                disabled={isClaiming}
+                onClick={() => claimBounty(bounty.id)}
               >
-                {isClaiming || txPending ? "Claiming..." : "Claim"}
-              </button>
+                {isClaiming ? "Claiming..." : "Claim"}
+              </ActionButton>
             )}
             {status === "claimed" && isCreator && (
-              <button
-                onClick={handleComplete}
+              <ActionButton
                 disabled={isCompleting}
-                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+                onClick={() => completeBounty(bounty.id)}
               >
                 {isCompleting ? "Completing..." : "Complete"}
-              </button>
+              </ActionButton>
             )}
             {status === "open" && isCreator && (
               <button
-                onClick={handleCancel}
+                onClick={() => cancelBounty(bounty.id)}
                 disabled={isCancelling}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+                className="rounded-md bg-red-600 px-3 py-1 text-xs text-white transition hover:bg-red-500 disabled:opacity-50"
               >
                 {isCancelling ? "Cancelling..." : "Cancel"}
               </button>
@@ -321,7 +290,7 @@ function OnChainBountyCard({
           </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -358,60 +327,71 @@ function BountyCard({
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
+    <article className="rounded-lg border border-green-500/20 bg-black p-4 transition hover:border-green-500/40">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h3 className="font-medium text-white">{bounty.title}</h3>
           {bounty.description && (
-            <p className="text-sm text-gray-400 mt-1">{bounty.description}</p>
+            <p className="mt-1 text-sm text-zinc-500">{bounty.description}</p>
           )}
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-600">
             <span>{bounty.repo}</span>
-            <span>•</span>
+            <span>-</span>
             <span>
               {bounty.amount} {bounty.token}
             </span>
-            <span>•</span>
+            <span>-</span>
             <span>{new Date(bounty.created_at).toLocaleDateString()}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`px-2 py-1 text-xs rounded-full ${
-              bounty.status === "open"
-                ? "bg-green-500/20 text-green-400"
-                : bounty.status === "claimed"
-                  ? "bg-yellow-500/20 text-yellow-400"
-                  : "bg-blue-500/20 text-blue-400"
-            }`}
-          >
-            {bounty.status}
-          </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <StatusPill status={bounty.status} />
           {bounty.status === "open" && profileId && (
-            <button
-              onClick={handleClaim}
-              disabled={claiming}
-              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
-            >
+            <ActionButton disabled={claiming} onClick={handleClaim}>
               {claiming ? "Claiming..." : "Claim"}
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
-function getSubmitLabel(
-  isProcessing: boolean,
-  step: "form" | "approve" | "create",
-  activeTab: "onchain" | "offchain"
-): string {
-  if (isProcessing) {
-    if (step === "approve") return "Approving...";
-    return "Creating...";
-  }
-  return activeTab === "onchain" ? "Create On-Chain" : "Create";
+function StatusPill({ status }: { status: string }) {
+  const color =
+    status === "open"
+      ? "bg-green-500/10 text-green-300 border-green-500/30"
+      : status === "claimed"
+        ? "bg-yellow-500/10 text-yellow-300 border-yellow-500/30"
+        : status === "completed"
+          ? "bg-green-500/10 text-green-300 border-green-500/30"
+          : "bg-zinc-900 text-zinc-400 border-zinc-800";
+
+  return (
+    <span className={`rounded-full border px-2 py-1 font-mono text-xs ${color}`}>
+      {status}
+    </span>
+  );
+}
+
+function ActionButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-md bg-green-600 px-3 py-1 text-xs text-white transition hover:bg-green-500 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
 }
 
 function CreateBountyModal({
@@ -433,12 +413,8 @@ function CreateBountyModal({
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<"form" | "approve" | "create">("form");
 
-  // On-chain hooks
-  const {
-    approve,
-    isPending: isApproving,
-    isSuccess: approveSuccess,
-  } = useApproveToken();
+  const { approve, isPending: isApproving, isSuccess: approveSuccess } =
+    useApproveToken();
   const {
     createBounty: createOnChain,
     isPending: isCreating,
@@ -447,24 +423,24 @@ function CreateBountyModal({
 
   useEffect(() => {
     if (approveSuccess && step === "approve") {
-      setStep("create");
       createOnChain(
-        "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // USDC on Base Sepolia
+        "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
         amount,
         6,
         repo,
         issueId,
         title
       );
+      queueMicrotask(() => setStep("create"));
     }
-  }, [approveSuccess]);
+  }, [amount, approveSuccess, createOnChain, issueId, repo, step, title]);
 
   useEffect(() => {
     if (createSuccess) {
       onCreate();
       onClose();
     }
-  }, [createSuccess]);
+  }, [createSuccess, onClose, onCreate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -472,154 +448,126 @@ function CreateBountyModal({
 
     if (activeTab === "onchain") {
       setStep("approve");
-      approve(
-        "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // USDC on Base Sepolia
+      approve("0x036CbD53842c5426634e7929541eC2318f3dCF7e", amount, 6);
+      return;
+    }
+
+    if (!profileId) return;
+    setSubmitting(true);
+    try {
+      await supabase.from("bounties").insert({
+        title,
+        description,
+        repo,
         amount,
-        6
-      );
-    } else {
-      // Off-chain: save to Supabase
-      if (!profileId) return;
-      setSubmitting(true);
-      try {
-        await supabase.from("bounties").insert({
-          title,
-          description,
-          repo,
-          amount,
-          token: "USDC",
-          chain_id: 84532,
-          contract_address: "0x0319Cd15baC7506602E206e9C58B09f6F4B2Fa0C",
-          creator_id: profileId,
-        });
-        onCreate();
-        onClose();
-      } catch (err) {
-        console.error("Error creating bounty:", err);
-      } finally {
-        setSubmitting(false);
-      }
+        token: "USDC",
+        chain_id: 84532,
+        contract_address: "0x0319Cd15baC7506602E206e9C58B09f6F4B2Fa0C",
+        creator_id: profileId,
+      });
+      onCreate();
+      onClose();
+    } catch (err) {
+      console.error("Error creating bounty:", err);
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  const isProcessing =
-    submitting || isApproving || isCreating || step === "approve" || step === "create";
+  const isProcessing = submitting || isApproving || isCreating;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-md">
-        <h2 className="text-lg font-semibold text-white mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-lg border border-green-500/20 bg-black p-6 shadow-[0_0_40px_rgba(34,197,94,0.08)]">
+        <h2 className="mb-4 font-mono text-lg font-semibold text-green-300">
           Create Bounty {activeTab === "onchain" ? "(On-Chain)" : "(Off-Chain)"}
         </h2>
 
-        {step === "approve" && (
-          <div className="text-center py-4">
-            <div className="text-yellow-400 mb-2">
-              Step 1/2: Approving USDC spend...
-            </div>
-            <div className="text-sm text-gray-400">
-              Please confirm the approval transaction in your wallet
-            </div>
+        {step !== "form" ? (
+          <div className="py-4 text-center">
+            <p className="mb-2 text-yellow-300">
+              {step === "approve"
+                ? "Step 1/2: Approving USDC spend..."
+                : "Step 2/2: Creating bounty..."}
+            </p>
+            <p className="text-sm text-zinc-500">
+              Please confirm the transaction in your wallet.
+            </p>
           </div>
-        )}
-
-        {step === "create" && (
-          <div className="text-center py-4">
-            <div className="text-yellow-400 mb-2">
-              Step 2/2: Creating bounty...
-            </div>
-            <div className="text-sm text-gray-400">
-              Please confirm the create transaction in your wallet
-            </div>
-          </div>
-        )}
-
-        {step === "form" && (
+        ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Title</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                placeholder="Fix memory leak in connector"
-                required
-              />
-            </div>
+            <FormInput label="Title" value={title} onChange={setTitle} placeholder="Fix memory leak in connector" required />
             {activeTab === "offchain" && (
               <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Description
-                </label>
+                <label className="mb-1 block text-sm text-zinc-500">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+                  className="w-full rounded-md border border-green-500/20 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-green-400"
                   placeholder="Detailed description..."
                   rows={3}
                 />
               </div>
             )}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Repository
-              </label>
-              <input
-                type="text"
-                value={repo}
-                onChange={(e) => setRepo(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                placeholder="gitlawb/node"
-                required
-              />
-            </div>
+            <FormInput label="Repository" value={repo} onChange={setRepo} placeholder="gitlawb/node" required />
             {activeTab === "onchain" && (
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Issue ID
-                </label>
-                <input
-                  type="text"
-                  value={issueId}
-                  onChange={(e) => setIssueId(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                  placeholder="issue-123"
-                />
-              </div>
+              <FormInput label="Issue ID" value={issueId} onChange={setIssueId} placeholder="issue-123" />
             )}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Amount (USDC)
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                placeholder="100"
-                required
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
+            <FormInput label="Amount (USDC)" value={amount} onChange={setAmount} placeholder="100" type="number" required />
+
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-800 text-gray-400 text-sm rounded-lg hover:text-white transition-colors"
+                className="rounded-md border border-green-500/20 bg-zinc-950 px-4 py-2 text-sm text-zinc-400 transition hover:text-white"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isProcessing}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+                className="rounded-md bg-green-600 px-4 py-2 text-sm text-white transition hover:bg-green-500 disabled:opacity-50"
               >
-                {getSubmitLabel(isProcessing, step, activeTab)}
+                {isProcessing
+                  ? "Creating..."
+                  : activeTab === "onchain"
+                    ? "Create On-Chain"
+                    : "Create"}
               </button>
             </div>
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+function FormInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm text-zinc-500">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-green-500/20 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-green-400"
+        placeholder={placeholder}
+        required={required}
+      />
     </div>
   );
 }

@@ -1,15 +1,11 @@
-import { http, createConfig } from "wagmi";
+import { http } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
-import { injected, walletConnect } from "wagmi/connectors";
+import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 
-export const config = createConfig({
+export const config = getDefaultConfig({
+  appName: "Proof Merge",
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "demo",
   chains: [baseSepolia],
-  connectors: [
-    injected(),
-    walletConnect({
-      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
-    }),
-  ],
   transports: {
     [baseSepolia.id]: http(),
   },
