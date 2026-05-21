@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
     const agents = await getAgents(limit, offset);
     return NextResponse.json(agents);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch agents from gitlawb" },
       { status: 502 }

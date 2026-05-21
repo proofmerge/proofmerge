@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const repos = await getRepos();
     return NextResponse.json(repos);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch repos from gitlawb" },
       { status: 502 }

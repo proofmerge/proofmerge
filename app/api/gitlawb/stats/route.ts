@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const stats = await getNetworkStats();
     return NextResponse.json(stats);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch stats from gitlawb" },
       { status: 502 }

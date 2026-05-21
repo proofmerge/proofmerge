@@ -202,7 +202,7 @@ export async function getBounties(): Promise<GitlawbBounty[]> {
   return [];
 }
 
-export async function getBounty(_id: number): Promise<GitlawbBounty> {
+export async function getBounty(): Promise<GitlawbBounty> {
   throw new Error("Bounties are on-chain, use contract directly");
 }
 

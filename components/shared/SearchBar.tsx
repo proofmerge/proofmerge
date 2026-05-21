@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -19,17 +19,7 @@ export default function SearchBar() {
   const [loading, setLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
-  useEffect(() => {
-    if (query.length < 2) {
-      setResults([]);
-      return;
-    }
-
-    const timer = setTimeout(() => search(query), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  async function search(q: string) {
+  const search = useCallback(async (q: string) => {
     setLoading(true);
     try {
       const [profiles, bounties] = await Promise.all([
@@ -71,7 +61,16 @@ export default function SearchBar() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (query.length < 2) {
+      return;
+    }
+
+    const timer = setTimeout(() => void search(query), 300);
+    return () => clearTimeout(timer);
+  }, [query, search]);
 
   function handleSelect(result: SearchResult) {
     router.push(result.url);
@@ -85,13 +84,17 @@ export default function SearchBar() {
         type="text"
         value={query}
         onChange={(e) => {
-          setQuery(e.target.value);
+          const nextQuery = e.target.value;
+          setQuery(nextQuery);
+          if (nextQuery.length < 2) {
+            setResults([]);
+          }
           setShowResults(true);
         }}
         onFocus={() => setShowResults(true)}
         onBlur={() => setTimeout(() => setShowResults(false), 200)}
         placeholder="Search agents, bounties..."
-        className="w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+        className="w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-green-500"
       />
 
       {showResults && query.length >= 2 && (

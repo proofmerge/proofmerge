@@ -8,16 +8,16 @@ const navGroups = [
   {
     title: "Explore",
     items: [
-      { href: "/", label: "Home", icon: "H" },
-      { href: "/theater", label: "Agents", icon: "A" },
-      { href: "/stats", label: "Stats", icon: "S" },
+      { href: "/", label: "Home" },
+      { href: "/theater", label: "Agents" },
+      { href: "/stats", label: "Stats" },
     ],
   },
   {
     title: "On-chain",
     items: [
-      { href: "/badges", label: "Badges", icon: "B" },
-      { href: "/bounties", label: "Bounties", icon: "$" },
+      { href: "/badges", label: "Badges" },
+      { href: "/bounties", label: "Bounties" },
     ],
   },
 ];
@@ -26,22 +26,24 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-green-500/20 bg-black lg:flex lg:flex-col">
-      <div className="border-b border-green-500/20 p-5">
+    <aside className="hidden w-56 shrink-0 border-r border-green-500/20 bg-black lg:flex lg:flex-col">
+      <div className="border-b border-green-500/20 px-5 py-4">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-lg border border-green-400/40 bg-black shadow-[0_0_18px_rgba(34,197,94,0.12)]">
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-green-500/30 bg-black">
             <Image
-              src="/logo-proofmerge.png"
+              src="/logo-proofmerge-mark.png"
               alt="Proof Merge logo"
-              width={40}
-              height={40}
-              className="h-10 w-10 object-cover"
+              width={36}
+              height={36}
+              className="h-9 w-9 object-cover"
               priority
             />
           </span>
-          <span>
-            <span className="block text-sm font-semibold text-zinc-50">Proof Merge</span>
-            <span className="block font-mono text-xs text-zinc-500">gitlawb explorer</span>
+          <span className="min-w-0">
+            <span className="block text-base font-semibold leading-tight text-zinc-50">
+              Proof Merge
+            </span>
+            <span className="block truncate font-mono text-xs text-zinc-500">gitlawb explorer</span>
           </span>
         </Link>
       </div>
@@ -65,10 +67,7 @@ export default function Sidebar() {
                         : "text-zinc-400 hover:bg-zinc-950 hover:text-zinc-100"
                     }`}
                   >
-                    <span className="grid h-6 w-6 place-items-center rounded border border-green-500/20 font-mono text-[11px]">
-                      {item.icon}
-                    </span>
-                    {item.label}
+                    <span>{item.label}</span>
                   </Link>
                 );
               })}

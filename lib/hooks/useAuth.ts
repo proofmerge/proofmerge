@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -12,16 +12,7 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Auto-create or fetch profile when wallet connects
-  useEffect(() => {
-    if (isConnected && address) {
-      fetchOrCreateProfile(address);
-    } else {
-      setProfile(null);
-    }
-  }, [isConnected, address]);
-
-  async function fetchOrCreateProfile(walletAddress: string) {
+  const fetchOrCreateProfile = useCallback(async (walletAddress: string) => {
     setLoading(true);
     try {
       // Try to find existing profile by wallet
@@ -55,7 +46,16 @@ export function useAuth() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  // Auto-create or fetch profile when wallet connects
+  useEffect(() => {
+    if (isConnected && address) {
+      queueMicrotask(() => void fetchOrCreateProfile(address));
+    } else {
+      queueMicrotask(() => setProfile(null));
+    }
+  }, [isConnected, address, fetchOrCreateProfile]);
 
   async function updateProfile(updates: Partial<Profile>) {
     if (!profile) return;

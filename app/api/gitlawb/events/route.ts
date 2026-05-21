@@ -8,7 +8,7 @@ export async function GET() {
     // Generate mock events since real events require direct node access
     const events = generateMockEvents(20);
     return NextResponse.json(events);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to generate events" },
       { status: 500 }

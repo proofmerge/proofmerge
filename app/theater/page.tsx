@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getAgents } from "@/lib/gitlawb/client";
 import { generateMockEvents } from "@/lib/gitlawb/mock-events";
@@ -12,17 +12,9 @@ export default function TheaterPage() {
   const [selectedAgent, setSelectedAgent] = useState<GitlawbAgent | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => {
-      setEvents(generateMockEvents(5));
-    }, 8000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
-      const [agentsData] = await Promise.all([getAgents(20)]);
+      const agentsData = await getAgents(20);
       setAgents(agentsData);
       setEvents(generateMockEvents(10));
     } catch (err) {
@@ -30,34 +22,46 @@ export default function TheaterPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => void fetchData());
+    const interval = setInterval(() => {
+      setEvents(generateMockEvents(5));
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-green-400 font-mono animate-pulse">
-          Loading agent theater...
+      <div className="flex h-64 items-center justify-center">
+        <div className="font-mono text-sm text-green-400 animate-pulse">
+          [ loading agents... ]
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">AI Agent Theater</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Watch AI agents work on the gitlawb network in real-time
+    <div className="space-y-4">
+      <section className="rounded-lg border border-green-500/20 bg-black p-4">
+        <p className="font-mono text-xs uppercase tracking-wide text-green-400">
+          [ agent theater ]
         </p>
-      </div>
+        <h1 className="mt-2 text-2xl font-semibold text-white">
+          AI Agent Theater
+        </h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Watch AI agents work on the gitlawb network in real time.
+        </p>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Agent List */}
-        <div className="lg:col-span-1 space-y-3">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="space-y-3">
+          <h2 className="font-mono text-xs uppercase tracking-wide text-zinc-600">
             Active Agents ({agents.length})
           </h2>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+          <div className="max-h-[600px] space-y-2 overflow-y-auto pr-2">
             {agents.map((agent) => (
               <AgentCard
                 key={agent.did}
@@ -69,28 +73,22 @@ export default function TheaterPage() {
           </div>
         </div>
 
-        {/* Activity Feed */}
-        <div className="lg:col-span-2 space-y-3">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+        <div className="space-y-3 lg:col-span-2">
+          <h2 className="font-mono text-xs uppercase tracking-wide text-zinc-600">
             Live Activity
           </h2>
-          <div className="bg-gray-950 border border-green-500/20 rounded-xl p-4 font-mono text-sm max-h-[600px] overflow-y-auto">
+          <div className="max-h-[600px] overflow-y-auto rounded-lg border border-green-500/20 bg-black p-4 font-mono text-sm shadow-[0_0_28px_rgba(34,197,94,0.05)]">
             {events.map((event, i) => (
               <EventLine
                 key={`${event.seq}-${i}`}
                 event={event}
-                highlight={
-                  selectedAgent
-                    ? event.author.did === selectedAgent.did
-                    : false
-                }
+                highlight={selectedAgent ? event.author.did === selectedAgent.did : false}
               />
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Agent Detail Panel */}
       {selectedAgent && (
         <AgentDetailPanel
           agent={selectedAgent}
@@ -112,43 +110,43 @@ function AgentCard({
 }) {
   const trustColor =
     agent.trustScore >= 0.8
-      ? "text-green-400"
+      ? "text-green-300"
       : agent.trustScore >= 0.6
-        ? "text-emerald-400"
+        ? "text-emerald-300"
         : agent.trustScore >= 0.4
-          ? "text-yellow-400"
+          ? "text-yellow-300"
           : agent.trustScore >= 0.2
-            ? "text-orange-400"
-            : "text-red-400";
+            ? "text-orange-300"
+            : "text-red-300";
 
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-left p-3 rounded-lg border transition-all ${
+      className={`w-full rounded-lg border p-3 text-left transition ${
         isSelected
-          ? "bg-green-500/10 border-green-500/30"
-          : "bg-gray-900 border-gray-800 hover:border-gray-700"
+          ? "border-green-500/40 bg-green-500/10"
+          : "border-green-500/15 bg-black hover:border-green-500/35"
       }`}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-xs">
-            🤖
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-green-500/20 bg-zinc-950 font-mono text-xs text-green-400">
+            AI
           </div>
-          <div>
-            <div className="text-sm font-medium text-white">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-white">
               {agent.name}
             </div>
-            <div className="text-xs text-gray-500 font-mono">
-              {agent.did.slice(0, 20)}...
+            <div className="truncate font-mono text-xs text-zinc-600">
+              {agent.did.slice(0, 24)}...
             </div>
           </div>
         </div>
         <div className="text-right">
-          <div className={`text-sm font-mono ${trustColor}`}>
+          <div className={`font-mono text-sm ${trustColor}`}>
             {agent.trustScore.toFixed(2)}
           </div>
-          <div className="text-[10px] text-gray-600 uppercase">
+          <div className="text-[10px] uppercase text-zinc-700">
             {agent.trustLevel}
           </div>
         </div>
@@ -166,36 +164,35 @@ function EventLine({
 }) {
   const typeColors: Record<string, string> = {
     "ref-update": "text-green-400",
-    issue: "text-yellow-400",
-    pr: "text-blue-400",
-    "agent-action": "text-purple-400",
+    issue: "text-yellow-300",
+    pr: "text-emerald-300",
+    "agent-action": "text-green-300",
+  };
+  const typeMarkers: Record<string, string> = {
+    "ref-update": ">",
+    issue: "*",
+    pr: "#",
+    "agent-action": "~",
   };
 
-  const typeIcons: Record<string, string> = {
-    "ref-update": "↗",
-    issue: "●",
-    pr: "◆",
-    "agent-action": "⚡",
-  };
-
-  const color = typeColors[event.type] || "text-gray-400";
-  const icon = typeIcons[event.type] || "·";
+  const color = typeColors[event.type] || "text-zinc-400";
+  const marker = typeMarkers[event.type] || ".";
   const time = new Date(event.timestamp).toLocaleTimeString();
 
   return (
     <div
-      className={`py-1.5 border-b border-gray-800/50 last:border-0 ${
-        highlight ? "bg-green-500/5 -mx-4 px-4" : ""
+      className={`border-b border-green-500/10 py-1.5 last:border-0 ${
+        highlight ? "-mx-4 bg-green-500/5 px-4" : ""
       }`}
     >
-      <span className="text-gray-600">{time}</span>
-      <span className={`mx-2 ${color}`}>{icon}</span>
-      <span className="text-gray-400">{event.author.name}</span>
-      <span className="text-gray-600 mx-1">in</span>
-      <span className="text-gray-300">{event.repo}</span>
+      <span className="text-zinc-700">{time}</span>
+      <span className={`mx-2 ${color}`}>{marker}</span>
+      <span className="text-zinc-400">{event.author.name}</span>
+      <span className="mx-1 text-zinc-700">in</span>
+      <span className="text-zinc-300">{event.repo}</span>
       {event.message && (
         <>
-          <span className="text-gray-600 mx-1">—</span>
+          <span className="mx-1 text-zinc-700">-</span>
           <span className={color}>{event.message}</span>
         </>
       )}
@@ -211,55 +208,63 @@ function AgentDetailPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="bg-gray-900 border border-green-500/20 rounded-xl p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div>
+    <section className="rounded-lg border border-green-500/20 bg-black p-6">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <h3 className="text-lg font-semibold text-white">{agent.name}</h3>
-          <p className="text-sm text-gray-400 font-mono mt-1">{agent.did}</p>
+          <p className="mt-1 break-all font-mono text-sm text-zinc-500">
+            {agent.did}
+          </p>
         </div>
         <button
           onClick={onClose}
-          className="text-gray-500 hover:text-white transition-colors"
+          className="text-zinc-600 transition hover:text-green-300"
+          aria-label="Close agent details"
         >
-          ✕
+          x
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-green-400">
-            {agent.trustScore.toFixed(2)}
-          </div>
-          <div className="text-xs text-gray-400">Trust Score</div>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-white">{agent.trustLevel}</div>
-          <div className="text-xs text-gray-400">Trust Level</div>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-white">{agent.pushes}</div>
-          <div className="text-xs text-gray-400">Pushes</div>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-white">{agent.repos}</div>
-          <div className="text-xs text-gray-400">Repos</div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <DetailStat label="Trust Score" value={agent.trustScore.toFixed(2)} highlight />
+        <DetailStat label="Trust Level" value={agent.trustLevel} />
+        <DetailStat label="Pushes" value={agent.pushes.toString()} />
+        <DetailStat label="Repos" value={agent.repos.toString()} />
       </div>
 
-      <div className="mt-4 flex gap-3">
+      <div className="mt-4 flex flex-wrap gap-3">
         <Link
           href={`/profile/${encodeURIComponent(agent.did)}`}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
+          className="rounded-md bg-green-600 px-4 py-2 text-sm text-white transition hover:bg-green-500"
         >
           View Profile
         </Link>
         <button
           onClick={() => navigator.clipboard.writeText(agent.did)}
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg transition-colors"
+          className="rounded-md border border-green-500/20 bg-zinc-950 px-4 py-2 text-sm text-zinc-300 transition hover:border-green-500/40 hover:text-green-300"
         >
           Copy DID
         </button>
       </div>
+    </section>
+  );
+}
+
+function DetailStat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-green-500/10 bg-zinc-950 p-3 text-center">
+      <div className={`font-mono text-xl font-semibold ${highlight ? "text-green-300" : "text-white"}`}>
+        {value}
+      </div>
+      <div className="text-xs text-zinc-500">{label}</div>
     </div>
   );
 }

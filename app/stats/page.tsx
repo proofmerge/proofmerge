@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRealtimeStats } from "@/lib/hooks/useRealtime";
-import { getNetworkStats, getRepos, getAgents } from "@/lib/gitlawb/client";
-import type { GitlawbRepo, GitlawbAgent, GitlawbNetworkStats } from "@/lib/gitlawb/types";
+import { getAgents, getNetworkStats, getRepos } from "@/lib/gitlawb/client";
+import type {
+  GitlawbAgent,
+  GitlawbNetworkStats,
+  GitlawbRepo,
+} from "@/lib/gitlawb/types";
 
 export default function StatsPage() {
   const realtimeStats = useRealtimeStats();
@@ -12,11 +16,7 @@ export default function StatsPage() {
   const [agents, setAgents] = useState<GitlawbAgent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  async function fetchStats() {
+  const fetchStats = useCallback(async () => {
     try {
       const [stats, reposData, agentsData] = await Promise.all([
         getNetworkStats(),
@@ -31,145 +31,110 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => void fetchStats());
+  }, [fetchStats]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400">Loading stats...</div>
+      <div className="flex h-64 items-center justify-center">
+        <div className="font-mono text-sm text-green-400 animate-pulse">
+          [ loading stats... ]
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Network Stats</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          gitlawb network health and activity
+    <div className="space-y-4">
+      <section className="rounded-lg border border-green-500/20 bg-black p-4">
+        <p className="font-mono text-xs uppercase tracking-wide text-green-400">
+          [ network stats ]
         </p>
-      </div>
+        <h1 className="mt-2 text-2xl font-semibold text-white">
+          Network Stats
+        </h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          gitlawb network health, trending repos, and top contributors.
+        </p>
+      </section>
 
-      {/* Network Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatsCard
-          label="Agents"
-          value={networkStats?.agents || 0}
-          icon="🤖"
-        />
-        <StatsCard
-          label="Repos"
-          value={networkStats?.repos || 0}
-          icon="📁"
-        />
-        <StatsCard
-          label="Nodes"
-          value={networkStats?.nodes || 0}
-          icon="🖥️"
-        />
-        <StatsCard
-          label="Bounties"
-          value={realtimeStats.bounties}
-          icon="💰"
-        />
-      </div>
+      <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-4">
+        <StatsCard label="Agents" value={networkStats?.agents || 0} code="AI" />
+        <StatsCard label="Repos" value={networkStats?.repos || 0} code="RP" />
+        <StatsCard label="Nodes" value={networkStats?.nodes || 0} code="ND" />
+        <StatsCard label="Bounties" value={realtimeStats.bounties} code="BO" />
+      </section>
 
-      {/* Proof Merge Stats */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">
-          Proof Merge Activity
-        </h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-purple-400">
-              {realtimeStats.profiles}
-            </div>
-            <div className="text-sm text-gray-400">Profiles</div>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Proof Merge Activity">
+          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-green-500/10 bg-green-500/10">
+            <MiniStat label="Profiles" value={realtimeStats.profiles} />
+            <MiniStat label="Badges" value={realtimeStats.badges} />
+            <MiniStat label="Bounties" value={realtimeStats.bounties} />
           </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-purple-400">
-              {realtimeStats.badges}
-            </div>
-            <div className="text-sm text-gray-400">Badges Minted</div>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-purple-400">
-              {realtimeStats.bounties}
-            </div>
-            <div className="text-sm text-gray-400">Bounties Created</div>
-          </div>
-        </div>
-      </div>
+        </Panel>
 
-      {/* Top Repos */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">
-          Trending Repos
-        </h2>
-        {repos.length > 0 ? (
-          <div className="space-y-3">
-            {repos.map((repo, i) => (
-              <div
-                key={`${repo.owner}-${repo.name}`}
-                className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-500 w-6">{i + 1}</span>
-                  <div>
-                    <div className="text-sm font-medium text-white">
+        <Panel title="Trending Repos" wide>
+          {repos.length > 0 ? (
+            <div className="divide-y divide-green-500/10">
+              {repos.map((repo, i) => (
+                <div
+                  key={`${repo.owner}-${repo.name}`}
+                  className="grid gap-3 py-3 text-sm sm:grid-cols-[36px_1fr_auto] sm:items-center"
+                >
+                  <span className="font-mono text-xs text-zinc-700">
+                    #{i + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">
                       {repo.owner.slice(0, 12)}.../{repo.name}
-                    </div>
+                    </p>
                     {repo.description && (
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {repo.description.slice(0, 60)}
-                      </div>
+                      <p className="mt-1 truncate text-xs text-zinc-500">
+                        {repo.description}
+                      </p>
                     )}
                   </div>
+                  <span className="font-mono text-xs text-zinc-600">
+                    {repo.lastActivity
+                      ? new Date(repo.lastActivity).toLocaleDateString()
+                      : "N/A"}
+                  </span>
                 </div>
-                <div className="text-xs text-gray-500">
-                  {repo.lastActivity
-                    ? new Date(repo.lastActivity).toLocaleDateString()
-                    : "N/A"}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-400 text-sm">No repos data available</p>
-        )}
-      </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">No repos data available</p>
+          )}
+        </Panel>
+      </section>
 
-      {/* Top Agents */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">
-          Top Contributors
-        </h2>
+      <Panel title="Top Contributors">
         {agents.length > 0 ? (
-          <div className="space-y-3">
+          <div className="divide-y divide-green-500/10">
             {agents.map((agent, i) => (
               <div
                 key={agent.did}
-                className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0"
+                className="grid gap-3 py-3 text-sm sm:grid-cols-[36px_1fr_130px] sm:items-center"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-500 w-6">{i + 1}</span>
-                  <div>
-                    <div className="text-sm font-medium text-white">
-                      {agent.name}
-                    </div>
-                    <div className="text-xs text-gray-400">{agent.did.slice(0, 30)}...</div>
-                  </div>
+                <span className="font-mono text-xs text-zinc-700">#{i + 1}</span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-white">{agent.name}</p>
+                  <p className="mt-1 truncate font-mono text-xs text-zinc-600">
+                    {agent.did}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-16 bg-gray-800 rounded-full h-2">
+                  <div className="h-2 flex-1 rounded-full bg-zinc-900">
                     <div
-                      className="bg-purple-500 h-2 rounded-full"
-                      style={{
-                        width: `${Math.min(agent.trustScore * 100, 100)}%`,
-                      }}
+                      className="h-2 rounded-full bg-green-500"
+                      style={{ width: `${Math.min(agent.trustScore * 100, 100)}%` }}
                     />
                   </div>
-                  <span className="text-xs text-gray-400">
+                  <span className="font-mono text-xs text-green-300">
                     {agent.trustScore.toFixed(2)}
                   </span>
                 </div>
@@ -177,9 +142,9 @@ export default function StatsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-gray-400 text-sm">No agents data available</p>
+          <p className="text-sm text-zinc-500">No agents data available</p>
         )}
-      </div>
+      </Panel>
     </div>
   );
 }
@@ -187,19 +152,57 @@ export default function StatsPage() {
 function StatsCard({
   label,
   value,
-  icon,
+  code,
 }: {
   label: string;
   value: number;
-  icon: string;
+  code: string;
 }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-      <div className="text-2xl mb-2">{icon}</div>
-      <div className="text-2xl font-bold text-white">
+    <div className="bg-black p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-zinc-500">{label}</span>
+        <span className="rounded border border-green-500/20 px-1.5 py-0.5 font-mono text-[10px] text-green-400">
+          {code}
+        </span>
+      </div>
+      <div className="mt-3 font-mono text-2xl font-semibold text-green-300">
         {value.toLocaleString()}
       </div>
-      <div className="text-sm text-gray-400">{label}</div>
     </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-black p-4 text-center">
+      <div className="font-mono text-2xl font-semibold text-green-300">
+        {value.toLocaleString()}
+      </div>
+      <div className="mt-1 text-xs text-zinc-500">{label}</div>
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  children,
+  wide,
+}: {
+  title: string;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <section
+      className={`rounded-lg border border-green-500/20 bg-black p-4 ${
+        wide ? "lg:col-span-2" : ""
+      }`}
+    >
+      <h2 className="mb-3 font-mono text-sm font-semibold text-green-300">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }

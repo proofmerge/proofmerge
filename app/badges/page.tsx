@@ -1,61 +1,113 @@
 "use client";
 
+import { useEffect } from "react";
+import { useBadgeMint, useHasBadge } from "@/lib/contracts";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useHasBadge, useBadgeMint } from "@/lib/contracts";
 import { supabase } from "@/lib/supabase/client";
-import { useEffect, useState } from "react";
 import type { Profile } from "@/lib/supabase/types";
 
 const BADGES = [
   {
     id: 1,
+    code: "B01",
     name: "First Contribution",
     description: "Your first merged PR on gitlawb network",
-    icon: "🎉",
     requirement: "1+ PRs merged",
     check: (p: Profile) => p.total_prs >= 1,
   },
   {
     id: 2,
+    code: "B02",
     name: "Bug Hunter",
     description: "Closed 10+ issues on gitlawb",
-    icon: "🐛",
     requirement: "10+ issues closed",
     check: (p: Profile) => p.total_issues >= 10,
   },
   {
     id: 3,
+    code: "B03",
     name: "Top Reviewer",
     description: "Reviewed 20+ pull requests",
-    icon: "👀",
     requirement: "20+ PRs reviewed",
     check: (p: Profile) => p.total_prs >= 20,
   },
   {
     id: 4,
+    code: "B04",
     name: "Prolific Coder",
     description: "100+ commits to gitlawb repos",
-    icon: "💻",
     requirement: "100+ commits",
     check: (p: Profile) => p.total_commits >= 100,
   },
   {
     id: 5,
+    code: "B05",
     name: "Agent Master",
     description: "Deployed 5+ AI agents on gitlawb",
-    icon: "🤖",
     requirement: "5+ agents deployed",
-    check: (p: Profile) => p.total_commits >= 50, // proxy: 50+ commits
+    check: (p: Profile) => p.total_commits >= 50,
   },
   {
     id: 6,
+    code: "B06",
     name: "Bounty Hunter",
     description: "Claimed 3+ bounties successfully",
-    icon: "💰",
     requirement: "3+ bounties claimed",
-    check: (p: Profile) => p.total_issues >= 3, // proxy: 3+ issues
+    check: (p: Profile) => p.total_issues >= 3,
   },
 ];
+
+export default function BadgesPage() {
+  const { profile, isConnected, address } = useAuth();
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-lg border border-green-500/20 bg-black p-4">
+        <p className="font-mono text-xs uppercase tracking-wide text-green-400">
+          [ badge registry ]
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold text-white">Skill Badges</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Mint on-chain badges based on your gitlawb contributions.
+        </p>
+      </section>
+
+      {!isConnected && (
+        <section className="rounded-lg border border-green-500/20 bg-black p-6 text-center">
+          <p className="font-mono text-sm text-zinc-500">
+            [ connect wallet to check eligibility ]
+          </p>
+        </section>
+      )}
+
+      {isConnected && profile && (
+        <section className="rounded-lg border border-green-500/20 bg-black p-4">
+          <h2 className="mb-3 font-mono text-sm font-semibold text-green-300">
+            Your Stats
+          </h2>
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-green-500/10 bg-green-500/10 md:grid-cols-4">
+            <ProfileStat label="Commits" value={profile.total_commits} />
+            <ProfileStat label="PRs" value={profile.total_prs} />
+            <ProfileStat label="Issues" value={profile.total_issues} />
+            <ProfileStat label="Trust" value={profile.trust_score.toFixed(2)} highlight />
+          </div>
+        </section>
+      )}
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {BADGES.map((badge) => (
+          <BadgeCard
+            key={badge.id}
+            badge={badge}
+            address={address}
+            profileId={profile?.id}
+            profile={profile}
+          />
+        ))}
+      </section>
+    </div>
+  );
+}
 
 function BadgeCard({
   badge,
@@ -74,26 +126,20 @@ function BadgeCard({
   );
   const { mintBadge, isPending, isConfirming, isSuccess, error } =
     useBadgeMint();
-  const [savingToDb, setSavingToDb] = useState(false);
 
   const isMinted = hasBadge === true;
   const isMinting = isPending || isConfirming;
   const isEligible = profile ? badge.check(profile) : false;
 
-  // Save to Supabase after successful mint
   useEffect(() => {
     if (isSuccess && profileId) {
-      setSavingToDb(true);
-      supabase
-        .from("badges")
-        .insert({
-          profile_id: profileId,
-          badge_id: badge.id,
-          badge_name: badge.name,
-        })
-        .then(() => setSavingToDb(false));
+      void supabase.from("badges").insert({
+        profile_id: profileId,
+        badge_id: badge.id,
+        badge_name: badge.name,
+      });
     }
-  }, [isSuccess]);
+  }, [badge.id, badge.name, isSuccess, profileId]);
 
   function handleMint() {
     if (!address || !isEligible) return;
@@ -102,55 +148,53 @@ function BadgeCard({
 
   return (
     <div
-      className={`bg-gray-900 border rounded-xl p-6 transition-colors ${
+      className={`rounded-lg border bg-black p-5 transition ${
         isMinted
-          ? "border-purple-500/50 bg-purple-500/5"
+          ? "border-green-500/50 shadow-[0_0_24px_rgba(34,197,94,0.08)]"
           : isEligible
-            ? "border-green-500/30 bg-green-500/5"
-            : "border-gray-800"
+            ? "border-green-500/30"
+            : "border-green-500/15"
       }`}
     >
-      <div className="text-4xl mb-3">{badge.icon}</div>
-      <h3 className="text-lg font-semibold text-white">{badge.name}</h3>
-      <p className="text-sm text-gray-400 mt-2">{badge.description}</p>
-      <p className="text-xs text-gray-500 mt-1">Requires: {badge.requirement}</p>
+      <div className="mb-4 flex items-center justify-between">
+        <span className="rounded border border-green-500/20 bg-green-500/10 px-2 py-1 font-mono text-xs text-green-300">
+          {badge.code}
+        </span>
+        <span className="font-mono text-xs text-zinc-700">ERC-1155</span>
+      </div>
 
-      <div className="mt-4">
+      <h3 className="text-base font-semibold text-white">{badge.name}</h3>
+      <p className="mt-2 text-sm leading-6 text-zinc-500">
+        {badge.description}
+      </p>
+      <p className="mt-2 font-mono text-xs text-zinc-600">
+        requires: {badge.requirement}
+      </p>
+
+      <div className="mt-5">
         {checkingBadge ? (
-          <div className="text-sm text-gray-500">Checking...</div>
+          <p className="font-mono text-sm text-zinc-500">checking...</p>
         ) : isMinted ? (
-          <div className="flex items-center gap-2 text-sm text-purple-400">
-            <span>✅</span>
-            <span>Minted</span>
-          </div>
+          <p className="font-mono text-sm text-green-400">[ minted ]</p>
         ) : !isEligible ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span>🔒</span>
-            <span>Not eligible yet</span>
-          </div>
+          <p className="font-mono text-sm text-zinc-600">[ locked ]</p>
         ) : (
           <button
             onClick={handleMint}
             disabled={isMinting || !address}
-            className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`w-full rounded-md px-4 py-2 text-sm font-medium transition ${
               isMinting || !address
-                ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                : "bg-purple-600 hover:bg-purple-700 text-white"
+                ? "cursor-not-allowed bg-zinc-900 text-zinc-600"
+                : "bg-green-600 text-white hover:bg-green-500"
             }`}
           >
-            {!address
-              ? "Connect Wallet"
-              : isMinting
-                ? "Minting..."
-                : savingToDb
-                  ? "Saving..."
-                  : "Mint Badge"}
+            {!address ? "Connect Wallet" : isMinting ? "Minting..." : "Mint Badge"}
           </button>
         )}
       </div>
 
       {error && (
-        <div className="mt-2 text-xs text-red-400">
+        <div className="mt-3 text-xs text-red-400">
           {error.message.slice(0, 100)}
         </div>
       )}
@@ -158,71 +202,21 @@ function BadgeCard({
   );
 }
 
-export default function BadgesPage() {
-  const { profile, isConnected, address } = useAuth();
-
+function ProfileStat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: number | string;
+  highlight?: boolean;
+}) {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Skill Badges</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Mint on-chain badges based on your gitlawb contributions
-        </p>
+    <div className="bg-black p-4 text-center">
+      <div className={`font-mono text-xl font-semibold ${highlight ? "text-green-300" : "text-white"}`}>
+        {value}
       </div>
-
-      {!isConnected && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
-          <p className="text-gray-400">
-            Connect your wallet to check eligibility and mint badges
-          </p>
-        </div>
-      )}
-
-      {isConnected && profile && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h2 className="text-sm font-medium text-gray-400 mb-3">
-            Your Stats
-          </h2>
-          <div className="grid grid-cols-4 gap-4 text-center">
-            <div>
-              <div className="text-xl font-bold text-white">
-                {profile.total_commits}
-              </div>
-              <div className="text-xs text-gray-500">Commits</div>
-            </div>
-            <div>
-              <div className="text-xl font-bold text-white">
-                {profile.total_prs}
-              </div>
-              <div className="text-xs text-gray-500">PRs</div>
-            </div>
-            <div>
-              <div className="text-xl font-bold text-white">
-                {profile.total_issues}
-              </div>
-              <div className="text-xs text-gray-500">Issues</div>
-            </div>
-            <div>
-              <div className="text-xl font-bold text-purple-400">
-                {profile.trust_score.toFixed(2)}
-              </div>
-              <div className="text-xs text-gray-500">Trust</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {BADGES.map((badge) => (
-          <BadgeCard
-            key={badge.id}
-            badge={badge}
-            address={address}
-            profileId={profile?.id}
-            profile={profile}
-          />
-        ))}
-      </div>
+      <div className="mt-1 text-xs text-zinc-600">{label}</div>
     </div>
   );
 }

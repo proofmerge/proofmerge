@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { useAccount } from "wagmi";
 import { supabase } from "@/lib/supabase/client";
 import { useHasBadge } from "@/lib/contracts";
 import type { Profile, Badge, Bounty } from "@/lib/supabase/types";
@@ -32,11 +31,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const walletAddress = extractAddress(did);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [did]);
-
-  async function fetchProfile() {
+  const fetchProfile = useCallback(async () => {
     try {
       const { data: profileData } = await supabase
         .from("profiles")
@@ -68,7 +63,11 @@ export default function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [did]);
+
+  useEffect(() => {
+    queueMicrotask(() => void fetchProfile());
+  }, [fetchProfile]);
 
   if (loading) {
     return (
@@ -91,7 +90,7 @@ export default function ProfilePage() {
       {/* Profile Header */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center text-2xl">
+          <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center text-2xl">
             {profile.display_name?.[0] || "?"}
           </div>
           <div className="flex-1">
@@ -126,7 +125,7 @@ export default function ProfilePage() {
             <div className="text-xs text-gray-400">Issues</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-400">
+            <div className="text-2xl font-bold text-green-400">
               {profile.trust_score.toFixed(2)}
             </div>
             <div className="text-xs text-gray-400">Trust Score</div>
@@ -192,7 +191,7 @@ export default function ProfilePage() {
                       bounty.status === "open"
                         ? "bg-green-500/20 text-green-400"
                         : bounty.status === "completed"
-                          ? "bg-blue-500/20 text-blue-400"
+                          ? "bg-green-500/20 text-green-400"
                           : "bg-gray-500/20 text-gray-400"
                     }`}
                   >
@@ -211,10 +210,6 @@ export default function ProfilePage() {
 }
 
 function OnChainBadgesSection({ address }: { address: string }) {
-  const [onChainBadges, setOnChainBadges] = useState<
-    { id: number; name: string; icon: string }[]
-  >([]);
-
   // Check each badge
   const { data: has1 } = useHasBadge(address, 1);
   const { data: has2 } = useHasBadge(address, 2);
@@ -223,7 +218,7 @@ function OnChainBadgesSection({ address }: { address: string }) {
   const { data: has5 } = useHasBadge(address, 5);
   const { data: has6 } = useHasBadge(address, 6);
 
-  useEffect(() => {
+  const onChainBadges = useMemo(() => {
     const badges = [];
     if (has1) badges.push({ id: 1, ...BADGE_NAMES[1] });
     if (has2) badges.push({ id: 2, ...BADGE_NAMES[2] });
@@ -231,13 +226,13 @@ function OnChainBadgesSection({ address }: { address: string }) {
     if (has4) badges.push({ id: 4, ...BADGE_NAMES[4] });
     if (has5) badges.push({ id: 5, ...BADGE_NAMES[5] });
     if (has6) badges.push({ id: 6, ...BADGE_NAMES[6] });
-    setOnChainBadges(badges);
+    return badges;
   }, [has1, has2, has3, has4, has5, has6]);
 
   if (onChainBadges.length === 0) return null;
 
   return (
-    <div className="bg-gray-900 border border-purple-500/30 rounded-xl p-6">
+    <div className="bg-gray-900 border border-green-500/30 rounded-xl p-6">
       <h2 className="text-lg font-semibold text-white mb-4">
         On-Chain Badges ({onChainBadges.length})
       </h2>
@@ -245,11 +240,11 @@ function OnChainBadgesSection({ address }: { address: string }) {
         {onChainBadges.map((badge) => (
           <div
             key={badge.id}
-            className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-center"
+            className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center"
           >
             <div className="text-2xl mb-1">{badge.icon}</div>
             <div className="text-sm font-medium text-white">{badge.name}</div>
-            <div className="text-xs text-purple-400 mt-1">Verified on-chain</div>
+            <div className="text-xs text-green-400 mt-1">Verified on-chain</div>
           </div>
         ))}
       </div>
