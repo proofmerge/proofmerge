@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
-import { getRepos } from "@/lib/gitlawb/client";
 
 export const dynamic = "force-dynamic";
 
+const GITLAWB_API = "https://node.gitlawb.com/api/v1";
+
 export async function GET() {
   try {
-    const repos = await getRepos();
-    return NextResponse.json(repos);
+    const res = await fetch(`${GITLAWB_API}/repos`, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!res.ok) {
+      return NextResponse.json([]);
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data);
   } catch {
-    return NextResponse.json(
-      { error: "Failed to fetch repos from gitlawb" },
-      { status: 502 }
-    );
+    return NextResponse.json([]);
   }
 }

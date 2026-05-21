@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRealtimeStats } from "@/lib/hooks/useRealtime";
-import { getAgents, getNetworkStats, getRepos } from "@/lib/gitlawb/client";
+import { getAgents, getNetworkStats, getRepos, getPeers, getNetworkOverview } from "@/lib/gitlawb/client";
 import type {
   GitlawbAgent,
   GitlawbNetworkStats,
+  GitlawbNetworkOverview,
+  GitlawbPeer,
   GitlawbRepo,
 } from "@/lib/gitlawb/types";
 
@@ -14,18 +16,24 @@ export default function StatsPage() {
   const [networkStats, setNetworkStats] = useState<GitlawbNetworkStats | null>(null);
   const [repos, setRepos] = useState<GitlawbRepo[]>([]);
   const [agents, setAgents] = useState<GitlawbAgent[]>([]);
+  const [peers, setPeers] = useState<GitlawbPeer[]>([]);
+  const [overview, setOverview] = useState<GitlawbNetworkOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
     try {
-      const [stats, reposData, agentsData] = await Promise.all([
+      const [stats, reposData, agentsData, peersData, overviewData] = await Promise.all([
         getNetworkStats(),
         getRepos(),
         getAgents(10),
+        getPeers(),
+        getNetworkOverview(),
       ]);
       setNetworkStats(stats);
       setRepos(reposData.slice(0, 10));
       setAgents(agentsData.slice(0, 10));
+      setPeers(peersData);
+      setOverview(overviewData);
     } catch (err) {
       console.error("Error fetching stats:", err);
     } finally {
@@ -61,12 +69,57 @@ export default function StatsPage() {
         </p>
       </section>
 
-      <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-px overflow-hidden rounded-lg border border-green-500/20 bg-green-500/20 sm:grid-cols-2 lg:grid-cols-5">
         <StatsCard label="Agents" value={networkStats?.agents || 0} code="AI" />
         <StatsCard label="Repos" value={networkStats?.repos || 0} code="RP" />
         <StatsCard label="Pushes" value={networkStats?.commits24h || 0} code="PS" />
+        <StatsCard label="Peers" value={peers.length} code="PN" />
         <StatsCard label="Bounties" value={realtimeStats.bounties} code="BO" />
       </section>
+
+      {overview && overview.nodes.length > 0 && (
+        <Panel title="Network Nodes">
+          <div className="divide-y divide-green-500/10">
+            {overview.nodes.map((node) => (
+              <div
+                key={node.name}
+                className="grid gap-3 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{node.flag}</span>
+                    <p className="font-medium text-white">{node.name}</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
+                        node.online
+                          ? "bg-green-500/10 text-green-300"
+                          : "bg-red-500/10 text-red-300"
+                      }`}
+                    >
+                      {node.online ? "online" : "offline"}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-3 font-mono text-xs text-zinc-500">
+                    <span>agents: <span className="text-zinc-300">{node.agents.toLocaleString()}</span></span>
+                    <span>repos: <span className="text-zinc-300">{node.repos.toLocaleString()}</span></span>
+                    <span>pushes: <span className="text-zinc-300">{node.pushes.toLocaleString()}</span></span>
+                    <span>peers: <span className="text-zinc-300">{node.peers}</span></span>
+                    <span>v{node.version}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-zinc-600">{node.location}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-4 rounded-md border border-green-500/10 bg-zinc-950 p-3 font-mono text-xs text-zinc-500">
+            <span>{overview.online}/{overview.total} nodes online</span>
+            <span>cluster repos: <span className="text-green-300">{overview.totals.repos.toLocaleString()}</span></span>
+            <span>total pushes: <span className="text-green-300">{overview.totals.pushes.toLocaleString()}</span></span>
+          </div>
+        </Panel>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-3">
         <Panel title="Proof Merge Activity">
@@ -111,6 +164,37 @@ export default function StatsPage() {
           )}
         </Panel>
       </section>
+
+      <Panel title="Network Peers">
+        {peers.length > 0 ? (
+          <div className="divide-y divide-green-500/10">
+            {peers.map((peer) => (
+              <div
+                key={peer.did}
+                className="grid gap-3 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-white">{peer.name}</p>
+                  <p className="mt-1 truncate font-mono text-xs text-zinc-600">
+                    {peer.httpUrl}
+                  </p>
+                </div>
+                <span
+                  className={`w-fit rounded-full px-2 py-1 font-mono text-xs ${
+                    peer.reachable
+                      ? "bg-green-500/10 text-green-300"
+                      : "bg-red-500/10 text-red-300"
+                  }`}
+                >
+                  {peer.reachable ? "online" : "offline"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">No peers data available</p>
+        )}
+      </Panel>
 
       <Panel title="Top Contributors">
         {agents.length > 0 ? (

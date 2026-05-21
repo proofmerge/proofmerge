@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAgents } from "@/lib/gitlawb/client";
 
 export const dynamic = "force-dynamic";
+
+const GITLAWB_API = "https://node.gitlawb.com/api/v1";
 
 export async function GET(request: Request) {
   try {
@@ -9,12 +10,20 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = parseInt(searchParams.get("offset") || "0");
 
-    const agents = await getAgents(limit, offset);
-    return NextResponse.json(agents);
+    const res = await fetch(`${GITLAWB_API}/agents`, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!res.ok) {
+      return NextResponse.json({ agents: [] });
+    }
+
+    const data = await res.json();
+    const allAgents = data.agents || [];
+    const sliced = allAgents.slice(offset, offset + limit);
+
+    return NextResponse.json({ agents: sliced, total: allAgents.length });
   } catch {
-    return NextResponse.json(
-      { error: "Failed to fetch agents from gitlawb" },
-      { status: 502 }
-    );
+    return NextResponse.json({ agents: [], total: 0 });
   }
 }

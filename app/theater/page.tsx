@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { getAgents } from "@/lib/gitlawb/client";
+import { getAgents, getNetworkEvents } from "@/lib/gitlawb/client";
 import { generateMockEvents } from "@/lib/gitlawb/mock-events";
 import type { GitlawbAgent, GitlawbEvent } from "@/lib/gitlawb/types";
 
@@ -14,11 +14,15 @@ export default function TheaterPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const agentsData = await getAgents(20);
+      const [agentsData, realEvents] = await Promise.all([
+        getAgents(20),
+        getNetworkEvents(),
+      ]);
       setAgents(agentsData);
-      setEvents(generateMockEvents(10));
+      setEvents(realEvents.length > 0 ? realEvents : generateMockEvents(10));
     } catch (err) {
       console.error("Error fetching theater data:", err);
+      setEvents(generateMockEvents(10));
     } finally {
       setLoading(false);
     }
@@ -26,8 +30,9 @@ export default function TheaterPage() {
 
   useEffect(() => {
     queueMicrotask(() => void fetchData());
-    const interval = setInterval(() => {
-      setEvents(generateMockEvents(5));
+    const interval = setInterval(async () => {
+      const realEvents = await getNetworkEvents();
+      setEvents(realEvents.length > 0 ? realEvents : generateMockEvents(5));
     }, 8000);
     return () => clearInterval(interval);
   }, [fetchData]);

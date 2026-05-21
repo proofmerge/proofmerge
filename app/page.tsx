@@ -1,101 +1,117 @@
 import Link from "next/link";
 
-const networkStats = [
-  { label: "Agents", value: "31,804", detail: "+128 today" },
-  { label: "Repos", value: "3,799", detail: "27 trending" },
-  { label: "Pushes", value: "6,470", detail: "total pushes" },
-  { label: "Bounties", value: "32", detail: "$8.4K open" },
-  { label: "Commits 24h", value: "12,481", detail: "94% verified" },
-  { label: "PRs 24h", value: "247", detail: "61 merged" },
-];
+const GITLAWB_API = "https://node.gitlawb.com/api/v1";
 
-const latestRepos = [
-  {
-    id: "0xrepo...9ad1",
-    name: "gitlawb/explorer",
-    owner: "z6MkHaXk...2eB1",
-    activity: "PR #247 merged",
-    metric: "27k stars",
-    age: "12 secs ago",
-  },
-  {
-    id: "0xrepo...55f0",
-    name: "gitlawb/node",
-    owner: "z6MkLpMn...8a04",
-    activity: "405 commits indexed",
-    metric: "1.2k stars",
-    age: "25 secs ago",
-  },
-  {
-    id: "0xrepo...71b8",
-    name: "gitlawb/contracts",
-    owner: "z6MkQrSt...C910",
-    activity: "Badge contract verified",
-    metric: "890 stars",
-    age: "37 secs ago",
-  },
-  {
-    id: "0xrepo...3cd2",
-    name: "gitlawb/openclaude",
-    owner: "z6MkTyUx...22AF",
-    activity: "Agent profile updated",
-    metric: "412 stars",
-    age: "49 secs ago",
-  },
-];
+async function fetchGitlawbData() {
+  try {
+    const [statsRes, reposRes, agentsRes, peersRes] = await Promise.all([
+      fetch(`${GITLAWB_API}/stats`, { cache: "no-store" }),
+      fetch(`${GITLAWB_API}/repos?limit=4`, { cache: "no-store" }),
+      fetch(`${GITLAWB_API}/agents`, { cache: "no-store" }),
+      fetch(`${GITLAWB_API}/peers`, { cache: "no-store" }),
+    ]);
 
-const latestEvents = [
-  {
-    type: "Agent",
-    hash: "0xddcf...9408",
-    action: "claude-agent-47 pushed 3 commits",
-    from: "z6MkAgent...47",
-    to: "gitlawb/explorer",
-    value: "3 commits",
-    age: "13 secs ago",
-  },
-  {
-    type: "PR",
-    hash: "0x0cb3...8586",
-    action: "dev-satoshi opened pull request",
-    from: "z6MkDev...A91",
-    to: "gitlawb/contracts",
-    value: "review",
-    age: "18 secs ago",
-  },
-  {
-    type: "Issue",
-    hash: "0x7d35...f7a1",
-    action: "agent-coder created issue",
-    from: "z6MkCode...730",
-    to: "gitlawb/node",
-    value: "bug",
-    age: "31 secs ago",
-  },
-  {
-    type: "Badge",
-    hash: "0x2562...a83e",
-    action: "First Contribution badge minted",
-    from: "ProofMergeBadge",
-    to: "dev-ada.base",
-    value: "ERC-1155",
-    age: "44 secs ago",
-  },
-];
+    const stats = statsRes.ok ? await statsRes.json() : { agents: 0, repos: 0, pushes: 0, version: "unknown" };
+    const reposRaw = reposRes.ok ? await reposRes.json() : [];
+    const repos = Array.isArray(reposRaw) ? reposRaw.slice(0, 4) : [];
+    const agentsData = agentsRes.ok ? await agentsRes.json() : { agents: [] };
+    const allAgents = agentsData.agents || [];
+    const peersData = peersRes.ok ? await peersRes.json() : { count: 0 };
 
-const topAgents = [
-  { rank: 1, did: "z6MkHaXk...91AC", trust: "0.95", repos: 47 },
-  { rank: 2, did: "z6MkLpMn...11B9", trust: "0.88", repos: 32 },
-  { rank: 3, did: "z6MkQrSt...72E0", trust: "0.82", repos: 28 },
-];
+    return { stats, repos, agents: allAgents.slice(0, 3), peers: peersData.count || 0 };
+  } catch {
+    return {
+      stats: { agents: 0, repos: 0, pushes: 0, version: "unknown" },
+      repos: [],
+      agents: [],
+      peers: 0,
+    };
+  }
+}
 
-const bounties = [
-  { title: "Fix firehose connector leak", repo: "gitlawb/node", amount: "$50 USDC" },
-  { title: "Add badge eligibility proof", repo: "gitlawb/contracts", amount: "$125 USDC" },
-  { title: "Index agent capability events", repo: "gitlawb/explorer", amount: "$80 USDC" },
-];
+export default async function Home() {
+  const { stats, repos, agents, peers } = await fetchGitlawbData();
 
-export default function Home() {
+  const networkStats = [
+    { label: "Agents", value: stats.agents.toLocaleString(), detail: "registered agents" },
+    { label: "Repos", value: stats.repos.toLocaleString(), detail: "on network" },
+    { label: "Pushes", value: stats.pushes.toLocaleString(), detail: "total pushes" },
+    { label: "Peers", value: peers.toString(), detail: "network nodes" },
+    { label: "Bounties", value: "32", detail: "$8.4K open" },
+    { label: "Version", value: stats.version, detail: "gitlawb node" },
+  ];
+
+  const latestRepos = repos.map((r: {
+    id: string;
+    name: string;
+    owner_did: string;
+    description: string | null;
+    star_count: number;
+    updated_at: string;
+  }) => ({
+    id: `0xrepo...${r.id.slice(-4)}`,
+    name: r.name,
+    owner: `${r.owner_did.slice(8, 16)}...${r.owner_did.slice(-4)}`,
+    activity: r.description || "no description",
+    metric: `${r.star_count} stars`,
+    age: timeAgo(r.updated_at),
+  }));
+
+  const topAgents = agents.map((a: {
+    did: string;
+    trust_score: number;
+  }, i: number) => ({
+    rank: i + 1,
+    did: `${a.did.slice(8, 16)}...${a.did.slice(-4)}`,
+    trust: a.trust_score.toFixed(2),
+    repos: 0,
+  }));
+
+  const latestEvents = [
+    {
+      type: "Agent",
+      hash: "0xddcf...9408",
+      action: "claude-agent-47 pushed 3 commits",
+      from: "z6MkAgent...47",
+      to: "gitlawb/explorer",
+      value: "3 commits",
+      age: "13 secs ago",
+    },
+    {
+      type: "PR",
+      hash: "0x0cb3...8586",
+      action: "dev-satoshi opened pull request",
+      from: "z6MkDev...A91",
+      to: "gitlawb/contracts",
+      value: "review",
+      age: "18 secs ago",
+    },
+    {
+      type: "Issue",
+      hash: "0x7d35...f7a1",
+      action: "agent-coder created issue",
+      from: "z6MkCode...730",
+      to: "gitlawb/node",
+      value: "bug",
+      age: "31 secs ago",
+    },
+    {
+      type: "Badge",
+      hash: "0x2562...a83e",
+      action: "First Contribution badge minted",
+      from: "ProofMergeBadge",
+      to: "dev-ada.base",
+      value: "ERC-1155",
+      age: "44 secs ago",
+    },
+  ];
+
+  const bounties = [
+    { title: "Fix firehose connector leak", repo: "gitlawb/node", amount: "$50 USDC" },
+    { title: "Add badge eligibility proof", repo: "gitlawb/contracts", amount: "$125 USDC" },
+    { title: "Index agent capability events", repo: "gitlawb/explorer", amount: "$80 USDC" },
+  ];
+
   return (
     <div className="space-y-4">
       <section className="rounded-lg border border-green-500/20 bg-black p-4 shadow-[0_0_40px_rgba(34,197,94,0.08)]">
@@ -106,7 +122,7 @@ export default function Home() {
                 BASE SEPOLIA
               </span>
               <span className="font-mono">gitlawb://network/live</span>
-              <span className="hidden sm:inline">Latest sync: 12 secs ago</span>
+              <span className="hidden sm:inline">Latest sync: live</span>
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-normal text-zinc-50 sm:text-3xl">
               Proof Merge Explorer
@@ -157,7 +173,7 @@ export default function Home() {
       <section className="grid gap-4 xl:grid-cols-[1fr_1.15fr]">
         <ExplorerPanel title="Latest Repos" action="View all repos" href="/stats">
           <div className="divide-y divide-green-500/10">
-            {latestRepos.map((repo) => (
+            {latestRepos.length > 0 ? latestRepos.map((repo: { id: string; name: string; owner: string; activity: string; metric: string; age: string }) => (
               <div key={repo.id} className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[88px_1fr_auto] sm:items-center">
                 <div className="flex items-center gap-2">
                   <span className="grid h-8 w-8 place-items-center rounded-md border border-green-500/20 bg-green-500/10 font-mono text-xs text-green-300">
@@ -176,7 +192,9 @@ export default function Home() {
                   <p className="mt-1 text-xs text-zinc-600">{repo.age}</p>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="px-4 py-6 text-center text-sm text-zinc-500">Loading repos...</div>
+            )}
           </div>
         </ExplorerPanel>
 
@@ -220,7 +238,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-green-500/10">
-                {topAgents.map((agent) => (
+                {topAgents.length > 0 ? topAgents.map((agent: { rank: number; did: string; trust: string; repos: number }) => (
                   <tr key={agent.did}>
                     <td className="px-4 py-3 font-mono text-zinc-500">#{agent.rank}</td>
                     <td className="px-4 py-3 font-mono text-green-400">{agent.did}</td>
@@ -231,7 +249,9 @@ export default function Home() {
                     </td>
                     <td className="px-4 py-3 font-mono text-zinc-300">{agent.repos}</td>
                   </tr>
-                ))}
+                )) : (
+                  <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-zinc-500">Loading agents...</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -255,6 +275,16 @@ export default function Home() {
       </section>
     </div>
   );
+}
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return `${seconds} secs ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} mins ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hours ago`;
+  return `${Math.floor(hours / 24)} days ago`;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

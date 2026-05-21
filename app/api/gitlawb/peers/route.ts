@@ -6,17 +6,17 @@ const GITLAWB_API = "https://node.gitlawb.com/api/v1";
 
 export async function GET() {
   try {
-    const res = await fetch(`${GITLAWB_API}/stats`, {
+    const res = await fetch(`${GITLAWB_API}/peers`, {
       headers: { Accept: "application/json" },
     });
 
     if (!res.ok) {
-      return NextResponse.json({ agents: 0, repos: 0, pushes: 0 });
+      return NextResponse.json({ count: 0, peers: [] });
     }
 
     const data = await res.json();
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ agents: 0, repos: 0, pushes: 0 });
+    return NextResponse.json({ count: 0, peers: [] });
   }
 }

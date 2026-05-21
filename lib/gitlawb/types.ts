@@ -47,6 +47,33 @@ export interface GitlawbNetworkStats {
   prs24h: number;
 }
 
+export interface GitlawbNodeInfo {
+  name: string;
+  location: string;
+  flag: string;
+  online: boolean;
+  version: string;
+  agents: number;
+  repos: number;
+  pushes: number;
+  peers: number;
+}
+
+export interface GitlawbNetworkOverview {
+  nodes: GitlawbNodeInfo[];
+  totals: { agents: number; repos: number; pushes: number; peers: number };
+  online: number;
+  total: number;
+}
+
+export interface GitlawbPeer {
+  did: string;
+  name: string;
+  httpUrl: string;
+  lastSeen: string;
+  reachable: boolean;
+}
+
 export interface GitlawbBounty {
   id: number;
   repo: string;

@@ -4,10 +4,12 @@ import type {
   GitlawbRepo,
   GitlawbNetworkStats,
   GitlawbBounty,
+  GitlawbPeer,
+  GitlawbNetworkOverview,
 } from "./types";
 
-// Direct gitlawb node API
-const GITLAWB_API_URL = "https://node.gitlawb.com/api/v1";
+// Use Next.js API routes as proxy (avoids CORS)
+const API_BASE = "/api/gitlawb";
 
 const fallbackAgents: GitlawbAgent[] = [
   {
@@ -90,38 +92,33 @@ const fallbackStats: GitlawbNetworkStats = {
   prs24h: 247,
 };
 
-async function fetchJson<T>(endpoint: string): Promise<T> {
-  const signal = AbortSignal.timeout(5000);
-  const res = await fetch(`${GITLAWB_API_URL}${endpoint}`, {
-    next: { revalidate: 30 },
-    signal,
-  });
-
-  if (!res.ok) {
-    throw new Error(`gitlawb API error: ${res.status} ${res.statusText}`);
-  }
-
-  return res.json();
-}
-
 export async function getNetworkEvents(): Promise<GitlawbEvent[]> {
-  // Events require GraphQL subscriptions (not available via REST)
-  return [];
+  try {
+    const res = await fetch(`${API_BASE}/events?limit=20`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function getAgents(limit = 10, offset = 0): Promise<GitlawbAgent[]> {
   try {
-    const data = await fetchJson<{
-      agents: Array<{
-        did: string;
-        capabilities: string[];
-        trust_score: number;
-        registered_at: string;
-        last_seen: string | null;
-      }>;
-    }>(`/agents?limit=${limit}&offset=${offset}`);
+    const res = await fetch(`${API_BASE}/agents?limit=${limit}&offset=${offset}`);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
 
-    return (data.agents || []).map((a) => ({
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const agents = data.agents || [];
+    return agents.map((a: {
+      did: string;
+      capabilities: string[];
+      trust_score: number;
+      registered_at: string;
+      last_seen: string | null;
+    }) => ({
       did: a.did,
       name: a.did.slice(8, 20) + "...",
       trustScore: a.trust_score,
@@ -149,19 +146,22 @@ function getTrustLevel(score: number): string {
 
 export async function getRepos(): Promise<GitlawbRepo[]> {
   try {
-    const data = await fetchJson<
-      Array<{
-        id: string;
-        name: string;
-        owner_did: string;
-        description: string | null;
-        star_count: number;
-        created_at: string;
-        updated_at: string;
-      }>
-    >("/repos");
+    const res = await fetch(`${API_BASE}/repos`);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
 
-    return data.map((r) => ({
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const repos = Array.isArray(data) ? data : [];
+    return repos.map((r: {
+      id: string;
+      name: string;
+      owner_did: string;
+      description: string | null;
+      star_count: number;
+      created_at: string;
+      updated_at: string;
+    }) => ({
       name: r.name,
       owner: r.owner_did.slice(8, 20) + "...",
       description: r.description || undefined,
@@ -177,12 +177,11 @@ export async function getRepos(): Promise<GitlawbRepo[]> {
 
 export async function getNetworkStats(): Promise<GitlawbNetworkStats> {
   try {
-    const data = await fetchJson<{
-      agents: number;
-      repos: number;
-      pushes: number;
-      version: string;
-    }>("/stats");
+    const res = await fetch(`${API_BASE}/stats`);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
 
     return {
       nodes: 3,
@@ -197,8 +196,47 @@ export async function getNetworkStats(): Promise<GitlawbNetworkStats> {
   }
 }
 
+export async function getNetworkOverview(): Promise<GitlawbNetworkOverview> {
+  try {
+    const res = await fetch(`${API_BASE}/nodes`);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data;
+  } catch {
+    return {
+      nodes: [],
+      totals: { agents: 0, repos: 0, pushes: 0, peers: 0 },
+      online: 0,
+      total: 0,
+    };
+  }
+}
+
+export async function getPeers(): Promise<GitlawbPeer[]> {
+  try {
+    const res = await fetch(`${API_BASE}/peers`);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    return (data.peers || []).map((p: {
+      did: string;
+      http_url: string;
+      last_seen: string;
+      reachable: boolean;
+    }) => ({
+      did: p.did,
+      name: p.did.slice(8, 20) + "...",
+      httpUrl: p.http_url,
+      lastSeen: p.last_seen,
+      reachable: p.reachable,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getBounties(): Promise<GitlawbBounty[]> {
-  // Bounties are on-chain only
   return [];
 }
 
@@ -207,30 +245,8 @@ export async function getBounty(): Promise<GitlawbBounty> {
 }
 
 export async function getAgent(did: string): Promise<GitlawbAgent> {
-  const data = await fetchJson<{
-    agents: Array<{
-      did: string;
-      capabilities: string[];
-      trust_score: number;
-      registered_at: string;
-      last_seen: string | null;
-    }>;
-  }>(`/agents?limit=100`);
-
-  const agent = data.agents.find((a) => a.did === did);
+  const agents = await getAgents(100);
+  const agent = agents.find((a) => a.did === did);
   if (!agent) throw new Error("Agent not found");
-
-  return {
-    did: agent.did,
-    name: agent.did.slice(8, 20) + "...",
-    trustScore: agent.trust_score,
-    trustLevel: getTrustLevel(agent.trust_score),
-    pushes: 0,
-    repos: 0,
-    publicKey: {
-      id: agent.did,
-      type: "Ed25519VerificationKey2020",
-      publicKeyMultibase: agent.did.replace("did:key:", ""),
-    },
-  };
+  return agent;
 }
