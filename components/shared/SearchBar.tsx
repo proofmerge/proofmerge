@@ -36,15 +36,62 @@ export default function SearchBar() {
     const allResults: SearchResult[] = [];
 
     try {
-      // Search Supabase profiles
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, did, display_name")
-        .or(`display_name.ilike.%${q}%,did.ilike.%${q}%`)
-        .limit(3);
+      // Search all sources in parallel
+      const [profiles, bounties, agents, repos] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, did, display_name")
+          .or(`display_name.ilike.%${q}%,did.ilike.%${q}%`)
+          .limit(3),
 
-      if (profiles) {
-        for (const p of profiles) {
+        supabase
+          .from("bounties")
+          .select("id, title, repo, status")
+          .or(`title.ilike.%${q}%,repo.ilike.%${q}%`)
+          .limit(3),
+
+        supabase
+          .from("gitlawb_agents")
+          .select("did, trust_score")
+          .ilike("did", `%${q}%`)
+          .limit(3),
+
+        supabase
+          .from("gitlawb_repos")
+          .select("id, name, owner_did, description")
+          .or(`name.ilike.%${q}%,owner_did.ilike.%${q}%`)
+          .limit(3),
+      ]);
+
+      // Add agent results
+      if (agents.data) {
+        for (const a of agents.data) {
+          allResults.push({
+            type: "agent",
+            id: a.did,
+            title: a.did.slice(8, 20) + "...",
+            subtitle: `Trust: ${a.trust_score} • ${a.did}`,
+            url: `/profile/${encodeURIComponent(a.did)}`,
+          });
+        }
+      }
+
+      // Add repo results
+      if (repos.data) {
+        for (const r of repos.data) {
+          allResults.push({
+            type: "repo",
+            id: r.id,
+            title: `${r.owner_did.slice(8, 20)}.../${r.name}`,
+            subtitle: r.description || "gitlawb repo",
+            url: "/stats",
+          });
+        }
+      }
+
+      // Add profile results
+      if (profiles.data) {
+        for (const p of profiles.data) {
           allResults.push({
             type: "profile",
             id: p.id,
@@ -55,15 +102,9 @@ export default function SearchBar() {
         }
       }
 
-      // Search Supabase bounties
-      const { data: bounties } = await supabase
-        .from("bounties")
-        .select("id, title, repo, status")
-        .or(`title.ilike.%${q}%,repo.ilike.%${q}%`)
-        .limit(3);
-
-      if (bounties) {
-        for (const b of bounties) {
+      // Add bounty results
+      if (bounties.data) {
+        for (const b of bounties.data) {
           allResults.push({
             type: "bounty",
             id: b.id.toString(),
@@ -72,59 +113,6 @@ export default function SearchBar() {
             url: "/bounties",
           });
         }
-      }
-
-      // Search gitlawb agents (fetch 10, filter locally)
-      try {
-        const res = await fetch(
-          `https://node.gitlawb.com/api/v1/agents?limit=10`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const agents = data.agents || [];
-          const filtered = agents.filter(
-            (a: { did: string }) =>
-              a.did.toLowerCase().includes(q.toLowerCase())
-          );
-          for (const a of filtered.slice(0, 3)) {
-            allResults.push({
-              type: "agent",
-              id: a.did,
-              title: a.did.slice(8, 20) + "...",
-              subtitle: `Trust: ${a.trust_score.toFixed(2)}`,
-              url: `/profile/${encodeURIComponent(a.did)}`,
-            });
-          }
-        }
-      } catch {
-        // ignore gitlawb errors
-      }
-
-      // Search gitlawb repos (fetch 10, filter locally)
-      try {
-        const res = await fetch(
-          `https://node.gitlawb.com/api/v1/repos?limit=10`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const repos = Array.isArray(data) ? data : [];
-          const filtered = repos.filter(
-            (r: { name: string; owner_did: string }) =>
-              r.name.toLowerCase().includes(q.toLowerCase()) ||
-              r.owner_did.toLowerCase().includes(q.toLowerCase())
-          );
-          for (const r of filtered.slice(0, 3)) {
-            allResults.push({
-              type: "repo",
-              id: r.id || r.name,
-              title: `${r.owner_did.slice(8, 20)}.../${r.name}`,
-              subtitle: r.description || "gitlawb repo",
-              url: "/stats",
-            });
-          }
-        }
-      } catch {
-        // ignore gitlawb errors
       }
     } catch (err) {
       console.error("Search error:", err);

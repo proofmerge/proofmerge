@@ -14,6 +14,26 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface GitlawbAgent {
+  did: string;
+  capabilities: string[];
+  trust_score: number;
+  registered_at: string;
+  last_seen: string | null;
+  synced_at: string;
+}
+
+export interface GitlawbRepo {
+  id: string;
+  name: string;
+  owner_did: string;
+  description: string | null;
+  star_count: number;
+  created_at: string;
+  updated_at: string;
+  synced_at: string;
+}
+
 export interface Badge {
   id: number;
   profile_id: string;
