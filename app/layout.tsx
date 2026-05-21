@@ -10,8 +10,11 @@ export const metadata: Metadata = {
   description:
     "A gitlawb explorer for live events, AI agents, on-chain skill badges, and crypto bounties.",
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/logo-proofmerge.png",
   },
 };
