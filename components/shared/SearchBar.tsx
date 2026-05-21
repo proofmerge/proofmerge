@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { getAgents, getRepos } from "@/lib/gitlawb/client";
 
 interface SearchResult {
-  type: "profile" | "bounty" | "repo";
+  type: "profile" | "bounty" | "agent" | "repo" | "badge";
   id: string;
   title: string;
   subtitle: string;
@@ -22,7 +23,7 @@ export default function SearchBar() {
   const search = useCallback(async (q: string) => {
     setLoading(true);
     try {
-      const [profiles, bounties] = await Promise.all([
+      const [profiles, bounties, agents, repos] = await Promise.all([
         supabase
           .from("profiles")
           .select("id, did, display_name")
@@ -33,6 +34,21 @@ export default function SearchBar() {
           .select("id, title, repo, status")
           .or(`title.ilike.%${q}%,repo.ilike.%${q}%`)
           .limit(5),
+        getAgents(50).then((all) =>
+          all.filter(
+            (a) =>
+              a.did.toLowerCase().includes(q.toLowerCase()) ||
+              a.name.toLowerCase().includes(q.toLowerCase())
+          )
+        ),
+        getRepos().then((all) =>
+          all.filter(
+            (r) =>
+              r.name.toLowerCase().includes(q.toLowerCase()) ||
+              r.owner.toLowerCase().includes(q.toLowerCase()) ||
+              (r.description || "").toLowerCase().includes(q.toLowerCase())
+          )
+        ),
       ]);
 
       const profileResults: SearchResult[] = (profiles.data || []).map(
@@ -55,7 +71,28 @@ export default function SearchBar() {
         })
       );
 
-      setResults([...profileResults, ...bountyResults]);
+      const agentResults: SearchResult[] = agents.slice(0, 5).map((a) => ({
+        type: "agent" as const,
+        id: a.did,
+        title: a.name,
+        subtitle: `Trust: ${a.trustScore.toFixed(2)} • ${a.did.slice(0, 30)}...`,
+        url: `/profile/${encodeURIComponent(a.did)}`,
+      }));
+
+      const repoResults: SearchResult[] = repos.slice(0, 5).map((r) => ({
+        type: "repo" as const,
+        id: `${r.owner}/${r.name}`,
+        title: `${r.owner}/${r.name}`,
+        subtitle: r.description || "No description",
+        url: "/stats",
+      }));
+
+      setResults([
+        ...agentResults,
+        ...repoResults,
+        ...profileResults,
+        ...bountyResults,
+      ]);
     } catch (err) {
       console.error("Search error:", err);
     } finally {
@@ -65,6 +102,7 @@ export default function SearchBar() {
 
   useEffect(() => {
     if (query.length < 2) {
+      setResults([]);
       return;
     }
 
@@ -77,6 +115,14 @@ export default function SearchBar() {
     setQuery("");
     setShowResults(false);
   }
+
+  const typeIcons: Record<string, string> = {
+    agent: "🤖",
+    repo: "📁",
+    profile: "👤",
+    bounty: "💰",
+    badge: "🏅",
+  };
 
   return (
     <div className="relative">
@@ -93,34 +139,30 @@ export default function SearchBar() {
         }}
         onFocus={() => setShowResults(true)}
         onBlur={() => setTimeout(() => setShowResults(false), 200)}
-        placeholder="Search agents, bounties..."
-        className="w-64 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-green-500"
+        placeholder="Search DID, repo, bounty..."
+        className="w-full rounded-md border border-green-500/20 bg-zinc-950 px-3 py-2 font-mono text-sm text-green-100 outline-none placeholder:text-zinc-700 focus:border-green-400"
       />
 
       {showResults && query.length >= 2 && (
-        <div className="absolute top-full left-0 mt-1 w-full bg-gray-900 border border-gray-800 rounded-lg shadow-lg z-50 max-h-64 overflow-auto">
+        <div className="absolute top-full left-0 mt-1 w-full rounded-lg border border-green-500/20 bg-black shadow-lg z-50 max-h-64 overflow-auto">
           {loading ? (
-            <div className="p-3 text-sm text-gray-400">Searching...</div>
+            <div className="p-3 text-sm text-zinc-500">Searching...</div>
           ) : results.length === 0 ? (
-            <div className="p-3 text-sm text-gray-400">No results found</div>
+            <div className="p-3 text-sm text-zinc-500">No results found</div>
           ) : (
             results.map((result) => (
               <button
                 key={`${result.type}-${result.id}`}
                 onClick={() => handleSelect(result)}
-                className="w-full px-3 py-2 text-left hover:bg-gray-800 transition-colors"
+                className="w-full px-3 py-2 text-left hover:bg-zinc-900 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">
-                    {result.type === "profile"
-                      ? "👤"
-                      : result.type === "bounty"
-                        ? "💰"
-                        : "📁"}
+                  <span className="text-xs">
+                    {typeIcons[result.type] || "🔍"}
                   </span>
                   <div>
                     <div className="text-sm text-white">{result.title}</div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-zinc-500 font-mono">
                       {result.subtitle}
                     </div>
                   </div>

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import WalletButton from "@/components/shared/WalletButton";
+import SearchBar from "@/components/shared/SearchBar";
 
 export default function Header() {
   return (
@@ -28,11 +29,7 @@ export default function Header() {
             Live
           </div>
           <div className="min-w-0 flex-1">
-            <input
-              aria-label="Global explorer search"
-              className="h-10 w-full rounded-md border border-green-500/20 bg-zinc-950 px-3 font-mono text-sm text-green-100 outline-none placeholder:text-zinc-700 focus:border-green-400"
-              placeholder="Search DID, repo, commit hash, PR, issue, badge..."
-            />
+            <SearchBar />
           </div>
         </div>
 
