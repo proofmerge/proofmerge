@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const networkStats = [
   { label: "Agents", value: "31,804", detail: "+128 today" },
   { label: "Repos", value: "3,799", detail: "27 trending" },
@@ -153,7 +155,7 @@ export default function Home() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1.15fr]">
-        <ExplorerPanel title="Latest Repos" action="View all repos">
+        <ExplorerPanel title="Latest Repos" action="View all repos" href="/stats">
           <div className="divide-y divide-green-500/10">
             {latestRepos.map((repo) => (
               <div key={repo.id} className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[88px_1fr_auto] sm:items-center">
@@ -178,7 +180,7 @@ export default function Home() {
           </div>
         </ExplorerPanel>
 
-        <ExplorerPanel title="Latest Git Events" action="View all events">
+        <ExplorerPanel title="Latest Git Events" action="View all events" href="/theater">
           <div className="divide-y divide-green-500/10">
             {latestEvents.map((event) => (
               <div key={event.hash} className="grid gap-3 px-4 py-3 text-sm lg:grid-cols-[96px_1fr_88px] lg:items-center">
@@ -206,7 +208,7 @@ export default function Home() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <ExplorerPanel title="Top Agents" action="Leaderboard">
+        <ExplorerPanel title="Top Agents" action="Leaderboard" href="/theater">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="border-b border-green-500/10 text-xs text-zinc-500">
@@ -235,7 +237,7 @@ export default function Home() {
           </div>
         </ExplorerPanel>
 
-        <ExplorerPanel title="Open Bounties" action="Bounty board">
+        <ExplorerPanel title="Open Bounties" action="Bounty board" href="/bounties">
           <div className="divide-y divide-green-500/10">
             {bounties.map((bounty) => (
               <div key={bounty.title} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -267,19 +269,24 @@ function Metric({ label, value }: { label: string; value: string }) {
 function ExplorerPanel({
   title,
   action,
+  href,
   children,
 }: {
   title: string;
   action: string;
+  href: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-green-500/20 bg-black shadow-[0_0_28px_rgba(34,197,94,0.05)]">
       <div className="flex items-center justify-between border-b border-green-500/10 px-4 py-3">
         <h2 className="font-mono text-sm font-semibold text-green-300">{title}</h2>
-        <button className="rounded-md border border-green-500/20 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-green-400 hover:text-green-300">
+        <Link
+          href={href}
+          className="rounded-md border border-green-500/20 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-green-400 hover:text-green-300"
+        >
           {action}
-        </button>
+        </Link>
       </div>
       {children}
     </div>
